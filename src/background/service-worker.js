@@ -17,12 +17,34 @@ import {
   setMetadata,
 } from "../shared/db.js";
 import {
-  fieldIdsForCategories,
   matchesResearchFilters,
   researchFilterSignature,
+  selectionFromSettings,
 } from "../shared/filters.js";
 import { OpenAlexClient, cleanWorkForDisplay } from "../shared/openalex.js";
-import { scoreBatch } from "../shared/scoring.js";
+import { applySelectivity } from "../shared/ranking.js";
+import { SCORING_VERSION, scoreBatch } from "../shared/scoring.js";
+
+const FALLBACK_TAXONOMY = Object.freeze([
+  {
+    id: "17",
+    name: "Computer Science",
+    domainName: "Physical Sciences",
+    subfields: [
+      ["1702", "Artificial Intelligence"],
+      ["1703", "Computational Theory and Mathematics"],
+      ["1704", "Computer Graphics and Computer-Aided Design"],
+      ["1705", "Computer Networks and Communications"],
+      ["1706", "Computer Science Applications"],
+      ["1707", "Computer Vision and Pattern Recognition"],
+      ["1708", "Hardware and Architecture"],
+      ["1709", "Human-Computer Interaction"],
+      ["1710", "Information Systems"],
+      ["1711", "Signal Processing"],
+      ["1712", "Software"],
+    ].map(([id, name]) => ({ id, name })),
+  },
+]);
 
 let refreshPromise = null;
 let pendingRefreshReason = null;
@@ -47,6 +69,10 @@ function deduplicate(works) {
   return [...new Map(works.map((work) => [work.id, work])).values()];
 }
 
+function deduplicateAuthors(authors) {
+  return [...new Map(authors.map((author) => [author.id, author])).values()];
+}
+
 function chooseAuthorIds(works, limit) {
   const priority = [];
   const remainder = [];
@@ -67,9 +93,13 @@ function chooseAuthorIds(works, limit) {
 }
 
 async function ensureDefaults() {
+  if (chrome.storage.local.setAccessLevel) {
+    await chrome.storage.local.setAccessLevel({ accessLevel: "TRUSTED_CONTEXTS" });
+  }
   const stored = await chrome.storage.sync.get("settings");
-  if (!stored.settings) {
-    await chrome.storage.sync.set({ settings: normalizeSettings() });
+  const normalized = normalizeSettings(stored.settings || {});
+  if (JSON.stringify(stored.settings || null) !== JSON.stringify(normalized)) {
+    await chrome.storage.sync.set({ settings: normalized });
   }
 }
 
@@ -78,78 +108,195 @@ async function ensureAlarm() {
   const alarm = await chrome.alarms.get(REFRESH_ALARM);
   const periodInMinutes = settings.refreshHours * 60;
   if (!alarm || Math.abs((alarm.periodInMinutes || 0) - periodInMinutes) > 0.01) {
-    await chrome.alarms.create(REFRESH_ALARM, {
-      delayInMinutes: 1,
-      periodInMinutes,
+    await chrome.alarms.create(REFRESH_ALARM, { delayInMinutes: 1, periodInMinutes });
+  }
+}
+
+async function getTaxonomy({ force = false } = {}) {
+  const cached = await getMetadata("taxonomy");
+  const fresh = Date.parse(cached?.fetchedAt || 0) >= Date.now() - 30 * 24 * 60 * 60 * 1000;
+  if (!force && fresh && cached?.fields?.length) return cached.fields;
+  try {
+    const settings = await loadSettings();
+    const client = new OpenAlexClient({
+      apiKey: settings.apiKey,
+      maxEstimatedCostUsd: 0.005,
     });
+    const fields = await client.fetchTaxonomy();
+    if (fields.length) {
+      await setMetadata("taxonomy", { fields, fetchedAt: new Date().toISOString() });
+      return fields;
+    }
+  } catch (error) {
+    console.warn("Taxonomy refresh failed", error);
   }
+  return cached?.fields?.length ? cached.fields : FALLBACK_TAXONOMY;
 }
 
-async function fetchCandidateLanes(client, settings, since, until, seed) {
-  const fieldIds = fieldIdsForCategories(settings.selectedCategories);
-  const common = { since, until, seed, fieldIds, englishOnly: settings.englishOnly };
+function expandedSubfieldIds(selection, taxonomy) {
+  const result = new Set(selection.subfieldIds);
+  for (const fieldId of selection.fieldIds) {
+    const field = taxonomy.find((item) => item.id === fieldId);
+    for (const subfield of field?.subfields || []) result.add(subfield.id);
+  }
+  return [...result];
+}
+
+function progressWriter(baseState) {
+  let lastWrite = 0;
+  return async (progress) => {
+    const now = Date.now();
+    if (now - lastWrite < 750 && progress.fetched < progress.total) return;
+    lastWrite = now;
+    await setMetadata("refreshState", {
+      ...baseState,
+      status: "running",
+      ...progress,
+      updatedAt: new Date().toISOString(),
+    });
+  };
+}
+
+async function fetchDiscovery(client, settings, taxonomy, since, until, mode, writeProgress) {
+  const selection = selectionFromSettings(settings);
+  const hasTaxonomySelection = selection.fieldIds.length || selection.subfieldIds.length;
+  const laneLimit = mode === "limited" ? settings.broadSample : settings.maxDiscoveryWorks;
   const lanes = [];
-  if (settings.selectedCategories.length || !settings.queries.length) {
-    lanes.push(client.fetchWorks({ ...common, limit: settings.broadSample }));
+  if (selection.fieldIds.length) {
+    lanes.push({ label: "selected fields", fieldIds: selection.fieldIds, subfieldIds: [] });
   }
-  for (const query of settings.queries) {
-    lanes.push(
-      client.fetchWorks({
-        ...common,
-        limit: settings.perQuery,
-        query,
-      }),
-    );
+  if (selection.subfieldIds.length) {
+    lanes.push({ label: "selected subfields", fieldIds: [], subfieldIds: selection.subfieldIds });
   }
-  return deduplicate((await Promise.all(lanes)).flat())
-    .filter((work) => matchesResearchFilters(work, settings))
-    .map((work) => ({ ...work, isBaseline: false }));
+  if (!hasTaxonomySelection && settings.queries.length) {
+    for (const query of settings.queries) {
+      lanes.push({ label: query, fieldIds: [], subfieldIds: [], query });
+    }
+  }
+
+  if (!lanes.length && !settings.queries.length) {
+    const works = await client.fetchWorks({
+      since,
+      until,
+      limit: settings.broadSample,
+      seed: Math.floor(Date.now() / (settings.refreshHours * 3_600_000)),
+      englishOnly: settings.englishOnly,
+      requireAbstract: false,
+    });
+    await writeProgress({
+      phase: "discovery",
+      lane: "cross-disciplinary preview",
+      fetched: works.length,
+      total: works.length,
+      pages: Math.ceil(works.length / 100),
+    });
+    return {
+      works,
+      total: works.length,
+      retrieved: works.length,
+      pages: Math.ceil(works.length / 100),
+      truncated: true,
+      mode: "preview",
+    };
+  }
+
+  const allWorks = [];
+  let total = 0;
+  let pages = 0;
+  let truncated = false;
+  for (const lane of lanes) {
+    const result = await client.fetchWorksCursor({
+      since,
+      until,
+      limit: lane.query ? Math.min(settings.perQuery, laneLimit) : laneLimit,
+      query: lane.query || "",
+      fieldIds: lane.fieldIds,
+      subfieldIds: lane.subfieldIds,
+      englishOnly: settings.englishOnly,
+      requireAbstract: false,
+      onProgress: (progress) =>
+        writeProgress({ phase: "discovery", lane: lane.label, ...progress }),
+    });
+    allWorks.push(...result.works);
+    total += result.total;
+    pages += result.pages;
+    truncated ||= result.truncated;
+  }
+  const retrieved = deduplicate(allWorks);
+  const matched = retrieved.filter((work) => matchesResearchFilters(work, settings));
+  return {
+    works: matched,
+    total,
+    retrieved: retrieved.length,
+    pages,
+    truncated,
+    mode,
+    taxonomySubfields: expandedSubfieldIds(selection, taxonomy).length,
+  };
 }
 
-async function maybeFetchBaseline(client, settings, candidateSince, seed) {
-  const signature = researchFilterSignature(settings);
+async function maybeFetchBaseline(client, settings, taxonomy, candidateSince, writeProgress) {
+  const signature = `${researchFilterSignature(settings)}:${SCORING_VERSION}`;
   const previousSignature = await getMetadata("baselineSignature");
   if (previousSignature !== signature) await deleteBaselineWorks();
 
-  const existingWorks = await getAll("works");
-  const existingBaseline = existingWorks.filter((work) => work.isBaseline);
-  if (
-    previousSignature === signature &&
-    existingBaseline.length >= Math.min(100, settings.historySample)
-  ) {
-    return [];
-  }
+  const selection = selectionFromSettings(settings);
+  const targetSubfields = expandedSubfieldIds(selection, taxonomy);
+  const existing = (await getAll("works")).filter((work) => work.isBaseline);
+  const minimumExpected = targetSubfields.length
+    ? targetSubfields.length * Math.min(100, settings.baselinePerSubfield)
+    : Math.min(100, settings.baselinePerSubfield);
+  if (previousSignature === signature && existing.length >= minimumExpected) return [];
 
-  const baselineUntil = daysAgo(1, new Date(`${candidateSince}T00:00:00Z`));
-  const baselineSince = yearsAgo(settings.historyYears, baselineUntil);
-  const fieldIds = fieldIdsForCategories(settings.selectedCategories);
-  const common = {
-    since: baselineSince,
-    until: baselineUntil,
-    seed: seed + 17,
-    baseline: true,
-    fieldIds,
-    englishOnly: settings.englishOnly,
-  };
-  const lanes = [];
-  if (settings.selectedCategories.length || !settings.queries.length) {
-    lanes.push(client.fetchWorks({ ...common, limit: settings.historySample }));
-  }
-  for (const query of settings.queries) {
-    lanes.push(
-      client.fetchWorks({
-        ...common,
-        limit: settings.historyPerQuery,
-        query,
-        seed: seed + 31,
-      }),
+  const until = daysAgo(1, new Date(`${candidateSince}T00:00:00Z`));
+  const since = yearsAgo(settings.historyYears, until);
+  const baseline = [];
+  if (targetSubfields.length) {
+    for (let index = 0; index < targetSubfields.length; index += 1) {
+      const subfieldId = targetSubfields[index];
+      const works = await client.fetchWorks({
+        since,
+        until,
+        limit: settings.baselinePerSubfield,
+        seed: 3103 + Number(subfieldId),
+        baseline: true,
+        subfieldIds: [subfieldId],
+        englishOnly: settings.englishOnly,
+        requireAbstract: true,
+      });
+      baseline.push(...works);
+      await writeProgress({
+        phase: "reference corpus",
+        lane: `subfield ${index + 1} of ${targetSubfields.length}`,
+        fetched: baseline.length,
+        total: targetSubfields.length * settings.baselinePerSubfield,
+        pages: Math.ceil(baseline.length / 100),
+      });
+    }
+  } else {
+    baseline.push(
+      ...(await client.fetchWorks({
+        since,
+        until,
+        limit: settings.baselinePerSubfield,
+        seed: 3103,
+        baseline: true,
+        englishOnly: settings.englishOnly,
+        requireAbstract: true,
+      })),
     );
   }
-  const baseline = deduplicate((await Promise.all(lanes)).flat())
-    .filter((work) => matchesResearchFilters(work, settings))
-    .map((work) => ({ ...work, isBaseline: true }));
+  const result = deduplicate(baseline).map((work) => ({ ...work, isBaseline: true }));
   await setMetadata("baselineSignature", signature);
-  return baseline;
+  return result;
+}
+
+function selectReferences(works, limit) {
+  const baseline = works.filter((work) => work.isBaseline);
+  const recent = works
+    .filter((work) => !work.isBaseline)
+    .sort((left, right) => right.publicationDate.localeCompare(left.publicationDate));
+  return [...baseline, ...recent].slice(0, limit);
 }
 
 function safePaperUrl(work) {
@@ -162,6 +309,17 @@ function safePaperUrl(work) {
   return `https://openalex.org/${work.id}`;
 }
 
+async function qualifiedMonth(settings, allWorks = null) {
+  const relevant = (allWorks || (await getAll("works"))).filter(
+    (work) =>
+      !work.isBaseline &&
+      work.scoringVersion &&
+      work.publicationDate >= daysAgo(30) &&
+      matchesResearchFilters(work, settings),
+  );
+  return applySelectivity(relevant, settings);
+}
+
 async function recordNewPaperNotifications(
   scored,
   settings,
@@ -171,20 +329,20 @@ async function recordNewPaperNotifications(
 ) {
   if (!previousLastRefresh || reason === "install") return 0;
   const previousDate = previousLastRefresh.slice(0, 10);
-  const qualifying = scored.filter(
+  const qualified = await qualifiedMonth(settings);
+  const qualifiedIds = new Set(qualified.works.map((work) => work.id));
+  const newWorks = scored.filter(
     (work) =>
       !existingCandidateIds.has(work.id) &&
       work.publicationDate >= previousDate &&
-      matchesResearchFilters(work, settings) &&
-      (work.noveltyScore >= settings.minNovelty ||
-        work.researcherScore >= settings.minResearcher),
+      qualifiedIds.has(work.id),
   );
-  if (!qualifying.length) return 0;
+  if (!newWorks.length) return 0;
 
   const oldInbox = (await getMetadata("notificationInbox")) || [];
   const known = new Set(oldInbox.map((item) => item.workId));
   const createdAt = new Date().toISOString();
-  const entries = qualifying
+  const entries = newWorks
     .filter((work) => !known.has(work.id))
     .map((work) => ({
       id: `${work.id}:${createdAt}`,
@@ -201,15 +359,16 @@ async function recordNewPaperNotifications(
   if (!entries.length) return 0;
   await setMetadata("notificationInbox", [...entries, ...oldInbox].slice(0, 250));
 
-  if (!settings.notificationsEnabled) return entries.length;
-  const permission = await chrome.notifications.getPermissionLevel();
-  if (permission !== "granted") return entries.length;
+  const notificationsAllowed =
+    settings.notificationsEnabled &&
+    (await chrome.permissions.contains({ permissions: ["notifications"] }));
+  if (!notificationsAllowed || !chrome.notifications) return entries.length;
   for (const entry of entries.slice(0, 3)) {
     await chrome.notifications.create(`paper:${entry.workId}`, {
       type: "basic",
       iconUrl: chrome.runtime.getURL("assets/icon-128.png"),
-      title: "New paper cleared your filters",
-      message: `${entry.title}\nNovelty ${entry.noveltyScore} · Researcher ${entry.researcherScore}`,
+      title: "New paper cleared both filters",
+      message: `${entry.title}\nNovelty ${entry.noveltyScore} · Authorship ${entry.researcherScore}`,
       contextMessage: entry.topic,
       priority: 1,
     });
@@ -218,7 +377,7 @@ async function recordNewPaperNotifications(
     await chrome.notifications.create(`summary:${Date.now()}`, {
       type: "basic",
       iconUrl: chrome.runtime.getURL("assets/icon-128.png"),
-      title: `${entries.length} new papers cleared your filters`,
+      title: `${entries.length} new papers cleared both filters`,
       message: "Open the FilteredResearch inbox to review the full batch.",
       priority: 1,
     });
@@ -226,27 +385,29 @@ async function recordNewPaperNotifications(
   return entries.length;
 }
 
-function selectReferences(works, limit) {
-  const baseline = works
-    .filter((work) => work.isBaseline)
-    .sort((left, right) => right.publicationDate.localeCompare(left.publicationDate));
-  const recent = works
-    .filter((work) => !work.isBaseline)
-    .sort((left, right) => right.publicationDate.localeCompare(left.publicationDate));
-  const baselineLimit = Math.min(baseline.length, Math.floor(limit * 0.7));
-  return [...baseline.slice(0, baselineLimit), ...recent.slice(0, limit - baselineLimit)];
-}
-
 async function performRefresh(reason = "manual") {
   const settings = await loadSettings();
+  const taxonomy = await getTaxonomy();
+  const signature = researchFilterSignature(settings);
+  const previousCoverage = await getMetadata("discoveryCoverage");
+  const selection = selectionFromSettings(settings);
+  const hasFocusedScope = selection.fieldIds.length || selection.subfieldIds.length;
+  const fullScan =
+    Boolean(settings.apiKey) &&
+    hasFocusedScope &&
+    (reason === "rebuild" || previousCoverage?.signature !== signature || !previousCoverage?.fullCompletedAt);
+  const mode = fullScan ? "full" : settings.apiKey && hasFocusedScope ? "incremental" : "limited";
   const startedAt = new Date().toISOString();
-  await setMetadata("refreshState", { status: "running", reason, startedAt });
+  const baseState = { reason, startedAt, mode, signature };
+  const writeProgress = progressWriter(baseState);
+  await writeProgress({ phase: "starting", fetched: 0, total: null, pages: 0 });
 
-  const client = new OpenAlexClient({ apiKey: settings.apiKey });
+  const client = new OpenAlexClient({
+    apiKey: settings.apiKey,
+    maxEstimatedCostUsd: fullScan ? settings.fullScanBudgetUsd : settings.incrementalScanBudgetUsd,
+  });
   const until = isoDate();
-  const since = daysAgo(30);
-  const bucketMs = settings.refreshHours * 60 * 60 * 1000;
-  const seed = Math.floor(Date.now() / bucketMs) % 2_000_000_000;
+  const since = fullScan || mode === "limited" ? daysAgo(30) : daysAgo(settings.incrementalLookbackDays);
 
   try {
     const [previousLastRefresh, previouslyStoredWorks] = await Promise.all([
@@ -256,10 +417,18 @@ async function performRefresh(reason = "manual") {
     const existingCandidateIds = new Set(
       previouslyStoredWorks.filter((work) => !work.isBaseline).map((work) => work.id),
     );
-    const [candidates, baseline] = await Promise.all([
-      fetchCandidateLanes(client, settings, since, until, seed),
-      maybeFetchBaseline(client, settings, since, seed),
-    ]);
+    const discovery = await fetchDiscovery(
+      client,
+      settings,
+      taxonomy,
+      since,
+      until,
+      mode,
+      writeProgress,
+    );
+    const candidates = discovery.works.map((work) => ({ ...work, isBaseline: false }));
+
+    const baseline = await maybeFetchBaseline(client, settings, taxonomy, daysAgo(30), writeProgress);
     if (baseline.length) await bulkPut("works", baseline);
 
     const existingAuthors = await getAll("authors");
@@ -271,9 +440,18 @@ async function performRefresh(reason = "manual") {
     );
     const requestedAuthorIds = chooseAuthorIds(candidates, settings.maxAuthors);
     const missingAuthorIds = requestedAuthorIds.filter((id) => !freshAuthorIds.has(id));
-    const fetchedAuthors = await client.fetchAuthors(missingAuthorIds);
+    const fetchedAuthors = await client.fetchAuthors(missingAuthorIds, {
+      onProgress: (progress) => writeProgress({ phase: "authorship", lane: "authors", ...progress }),
+    });
     if (fetchedAuthors.length) await bulkPut("authors", fetchedAuthors);
 
+    await writeProgress({
+      phase: "scoring",
+      lane: "local cosine comparison",
+      fetched: 0,
+      total: candidates.length,
+      pages: 0,
+    });
     const allAuthors = deduplicateAuthors([...existingAuthors, ...fetchedAuthors]);
     const existingWorks = await getAll("works");
     const candidateIds = new Set(candidates.map((work) => work.id));
@@ -285,6 +463,7 @@ async function performRefresh(reason = "manual") {
       maxPeerComparisons: settings.maxPeerComparisons,
     });
     await bulkPut("works", scored);
+
     const notificationsGenerated = await recordNewPaperNotifications(
       scored,
       settings,
@@ -292,46 +471,73 @@ async function performRefresh(reason = "manual") {
       previousLastRefresh,
       reason,
     );
-
     await pruneCandidates(daysAgo(60));
+
     const completedAt = new Date().toISOString();
+    const coverage = fullScan
+      ? {
+          signature,
+          mode,
+          available: discovery.total,
+          retrieved: discovery.retrieved,
+          matched: candidates.length,
+          coveragePercent: discovery.total
+            ? Math.min(100, (100 * discovery.retrieved) / discovery.total)
+            : 100,
+          truncated: discovery.truncated,
+          fullCompletedAt: completedAt,
+          lastIncrementalAt: completedAt,
+        }
+      : {
+          ...(previousCoverage || {}),
+          signature,
+          mode,
+          limitedAvailable: discovery.total,
+          limitedRetrieved: discovery.retrieved,
+          limitedMatched: candidates.length,
+          lastIncrementalAt: completedAt,
+          needsApiKey: !settings.apiKey && hasFocusedScope,
+        };
     const state = {
       status: "ready",
       reason,
+      mode,
       startedAt,
       completedAt,
       candidatesFetched: candidates.length,
+      indexedRetrieved: discovery.retrieved,
+      indexedAvailable: discovery.total,
       baselineFetched: baseline.length,
       authorsFetched: fetchedAuthors.length,
       apiCostUsd: client.costUsd,
+      estimatedApiCostUsd: client.estimatedCostUsd,
       keyPresent: Boolean(settings.apiKey),
       notificationsGenerated,
     };
     await Promise.all([
       setMetadata("lastRefresh", completedAt),
       setMetadata("refreshState", state),
+      setMetadata("discoveryCoverage", coverage),
     ]);
     return state;
   } catch (error) {
     const state = {
       status: "error",
       reason,
+      mode,
       startedAt,
       completedAt: new Date().toISOString(),
       message: error instanceof Error ? error.message : String(error),
+      estimatedApiCostUsd: client.estimatedCostUsd,
     };
     await setMetadata("refreshState", state);
     throw error;
   }
 }
 
-function deduplicateAuthors(authors) {
-  return [...new Map(authors.map((author) => [author.id, author])).values()];
-}
-
 function refresh(reason) {
   if (refreshPromise) {
-    if (reason === "settings") pendingRefreshReason = reason;
+    if (["settings", "rebuild"].includes(reason)) pendingRefreshReason = reason;
     return refreshPromise;
   }
   refreshPromise = performRefresh(reason).finally(() => {
@@ -345,45 +551,122 @@ function refresh(reason) {
   return refreshPromise;
 }
 
-async function getFeed({ window = "week", sort = "balanced", includeAll = false } = {}) {
+async function getFeed({
+  window = "week",
+  sort = "balanced",
+  includeAll = false,
+  offset = 0,
+  limit = 120,
+} = {}) {
   const settings = await loadSettings();
   const windowConfig = WINDOWS[window] || WINDOWS.week;
   const cutoff = daysAgo(windowConfig.days);
-  const candidates = (await getAll("works")).filter(
+  const relevant = (await getAll("works")).filter(
     (work) =>
       !work.isBaseline &&
       work.scoringVersion &&
       work.publicationDate >= cutoff &&
-      matchesResearchFilters(work, settings) &&
-      (includeAll ||
-        work.noveltyScore >= settings.minNovelty ||
-        work.researcherScore >= settings.minResearcher),
+      matchesResearchFilters(work, settings),
   );
+  const selected = applySelectivity(relevant, settings, { includeAll });
   const sorters = {
     balanced: (left, right) => right.discoveryScore - left.discoveryScore,
     novelty: (left, right) => right.noveltyScore - left.noveltyScore,
     researcher: (left, right) => right.researcherScore - left.researcherScore,
     newest: (left, right) => right.publicationDate.localeCompare(left.publicationDate),
   };
-  candidates.sort(sorters[sort] || sorters.balanced);
+  selected.works.sort(sorters[sort] || sorters.balanced);
+  const safeOffset = Math.max(0, Number(offset) || 0);
+  const safeLimit = Math.min(250, Math.max(1, Number(limit) || 120));
+  const page = selected.works.slice(safeOffset, safeOffset + safeLimit);
   return {
-    papers: candidates.map(cleanWorkForDisplay),
+    papers: page.map(cleanWorkForDisplay),
+    resultCount: selected.works.length,
+    offset: safeOffset,
+    hasMore: safeOffset + page.length < selected.works.length,
+    screenedCount: relevant.length,
     window,
     sort,
     thresholds: {
-      novelty: settings.minNovelty,
-      researcher: settings.minResearcher,
+      noveltySelectivity: settings.noveltySelectivity,
+      authorshipSelectivity: settings.authorshipSelectivity,
+      cutoffs: selected.cutoffs,
+      topFractions: selected.topFractions,
     },
+    coverage: (await getMetadata("discoveryCoverage")) || null,
     stats: await databaseStats(),
   };
 }
 
+async function getQualifiedArxivScores(ids) {
+  const settings = await loadSettings();
+  const qualified = await qualifiedMonth(settings);
+  const allowed = new Set(qualified.works.map((work) => work.id));
+  const found = await getWorksByArxivIds(ids);
+  return Object.fromEntries(
+    Object.entries(found)
+      .filter(([, work]) => allowed.has(work.id))
+      .map(([id, work]) => [id, cleanWorkForDisplay(work)]),
+  );
+}
+
+function normalizeDoi(value) {
+  return String(value || "")
+    .toLowerCase()
+    .replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "")
+    .replace(/^doi:\s*/, "")
+    .trim();
+}
+
+function normalizedTitle(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+async function getSiteMatches(items = []) {
+  const settings = await loadSettings();
+  if (!settings.showArxivBadges) return {};
+  const qualified = await qualifiedMonth(settings);
+  const byDoi = new Map();
+  const byArxiv = new Map();
+  const byTitle = new Map();
+  for (const work of qualified.works) {
+    if (work.doi) byDoi.set(normalizeDoi(work.doi), work);
+    if (work.arxivId) byArxiv.set(work.arxivId, work);
+    byTitle.set(normalizedTitle(work.title), work);
+  }
+  return Object.fromEntries(
+    items.flatMap((item) => {
+      const work =
+        byDoi.get(normalizeDoi(item.doi)) ||
+        byArxiv.get(String(item.arxivId || "").replace(/v\d+$/i, "")) ||
+        byTitle.get(normalizedTitle(item.title));
+      return work
+        ? [[
+            item.key,
+            {
+              id: work.id,
+              title: cleanWorkForDisplay(work).title,
+              noveltyScore: work.noveltyScore,
+              researcherScore: work.researcherScore,
+            },
+          ]]
+        : [];
+    }),
+  );
+}
+
 async function scoreArxivPage({ title, arxivId }) {
   const existing = await getWorksByArxivIds([arxivId]);
-  if (existing[arxivId]?.scoringVersion) return existing[arxivId];
-
+  if (existing[arxivId]?.scoringVersion === SCORING_VERSION) return existing[arxivId];
   const settings = await loadSettings();
-  const client = new OpenAlexClient({ apiKey: settings.apiKey });
+  const client = new OpenAlexClient({
+    apiKey: settings.apiKey,
+    maxEstimatedCostUsd: settings.incrementalScanBudgetUsd,
+  });
   const work = await client.findWorkByTitle(title);
   if (!work) return null;
   work.arxivId ||= arxivId;
@@ -420,8 +703,12 @@ async function handleMessage(message) {
       return getFeed(message.payload);
     case "GET_STATUS":
       return databaseStats();
+    case "GET_TAXONOMY":
+      return getTaxonomy(message.payload || {});
     case "REFRESH":
       return refresh("manual");
+    case "REBUILD":
+      return refresh("rebuild");
     case "SETTINGS_CHANGED":
       await ensureAlarm();
       refresh("settings").catch(console.error);
@@ -430,7 +717,9 @@ async function handleMessage(message) {
       await clearDatabase();
       return { ok: true };
     case "GET_ARXIV_SCORES":
-      return getWorksByArxivIds(message.payload?.ids || []);
+      return getQualifiedArxivScores(message.payload?.ids || []);
+    case "GET_SITE_MATCHES":
+      return getSiteMatches(message.payload?.items || []);
     case "SCORE_ARXIV_PAGE":
       return scoreArxivPage(message.payload || {});
     case "GET_NOTIFICATIONS":
@@ -465,19 +754,21 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === REFRESH_ALARM) refresh("scheduled").catch(console.error);
 });
 
-chrome.notifications.onClicked.addListener((notificationId) => {
-  if (notificationId.startsWith("paper:")) {
-    const workId = notificationId.slice("paper:".length);
-    getById("works", workId)
-      .then((work) => chrome.tabs.create({ url: safePaperUrl(work || { id: workId }) }))
-      .catch(console.error);
-  } else {
-    chrome.tabs
-      .create({ url: chrome.runtime.getURL("src/notifications/notifications.html") })
-      .catch(console.error);
-  }
-  chrome.notifications.clear(notificationId).catch(console.error);
-});
+if (chrome.notifications?.onClicked) {
+  chrome.notifications.onClicked.addListener((notificationId) => {
+    if (notificationId.startsWith("paper:")) {
+      const workId = notificationId.slice("paper:".length);
+      getById("works", workId)
+        .then((work) => chrome.tabs.create({ url: safePaperUrl(work || { id: workId }) }))
+        .catch(console.error);
+    } else {
+      chrome.tabs
+        .create({ url: chrome.runtime.getURL("src/notifications/notifications.html") })
+        .catch(console.error);
+    }
+    chrome.notifications.clear(notificationId).catch(console.error);
+  });
+}
 
 chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   handleMessage(message)

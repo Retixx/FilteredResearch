@@ -1,6 +1,6 @@
 import { INCREMENTAL_MARKERS } from "./defaults.js";
 
-export const SCORING_VERSION = "transparent-heuristics-v1";
+export const SCORING_VERSION = "field-corpus-heuristics-v2";
 
 const STOPWORDS = new Set(
   `a an and are as at be been being by can could did do does for from had has have how if in into is it its may might more most no not of on or our should so such than that the their then there these they this those through to under using via was we were what when where which while who will with would`.split(
@@ -106,23 +106,37 @@ function bridgeRarity(work, peers) {
   return pairs.length ? pairs.filter((pair) => !peerPairs.has(pair)).length / pairs.length : 0.35;
 }
 
-function choosePeers(work, references, minimumTopicPeers, maximumPeers) {
-  const older = references.filter(
-    (reference) => reference.id !== work.id && reference.publicationDate < work.publicationDate,
-  );
-  const subfield = older.filter(
-    (reference) => work.subfieldId && reference.subfieldId === work.subfieldId,
-  );
-  const domain = older.filter(
-    (reference) => work.domainId && reference.domainId === work.domainId,
-  );
-  const pool =
+function buildPeerIndex(references) {
+  const bySubfield = new Map();
+  const byDomain = new Map();
+  for (const reference of references) {
+    if (reference.subfieldId) {
+      const peers = bySubfield.get(reference.subfieldId) || [];
+      peers.push(reference);
+      bySubfield.set(reference.subfieldId, peers);
+    }
+    if (reference.domainId) {
+      const peers = byDomain.get(reference.domainId) || [];
+      peers.push(reference);
+      byDomain.set(reference.domainId, peers);
+    }
+  }
+  return { all: references, bySubfield, byDomain };
+}
+
+function choosePeers(work, peerIndex, minimumTopicPeers, maximumPeers) {
+  const subfield = peerIndex.bySubfield.get(work.subfieldId) || [];
+  const domain = peerIndex.byDomain.get(work.domainId) || [];
+  const source =
     subfield.length >= minimumTopicPeers
       ? subfield
       : domain.length >= minimumTopicPeers
         ? domain
-        : older;
-  return pool.slice(0, maximumPeers);
+        : peerIndex.all;
+  const older = source.filter(
+    (reference) => reference.id !== work.id && reference.publicationDate < work.publicationDate,
+  );
+  return older.slice(0, maximumPeers);
 }
 
 function authorCareerScore(author) {
@@ -187,12 +201,13 @@ export function scoreBatch(candidates, references, authors, options = {}) {
   const vectors = new Map(
     allForIdf.map((work) => [work.id, buildVector(`${work.title} ${work.abstract}`, idf)]),
   );
+  const peerIndex = buildPeerIndex(references);
   const authorMap = authors instanceof Map ? authors : new Map(authors.map((author) => [author.id, author]));
 
   return candidates.map((work) => {
     const peers = choosePeers(
       work,
-      references,
+      peerIndex,
       settings.minTopicPeers,
       settings.maxPeerComparisons,
     );
@@ -213,7 +228,10 @@ export function scoreBatch(candidates, references, authors, options = {}) {
     const markers = settings.incrementalMarkers.filter((marker) => haystack.includes(marker));
     const penalty = Math.min(14, markers.length * 4.5);
     const rawNovelty = clamp(100 * (0.78 * semanticDistance + 0.14 * phrases + 0.08 * bridge) - penalty);
-    const noveltyConfidence = Math.min(1, Math.log1p(peers.length) / Math.log1p(250));
+    const abstractTokens = tokenize(work.abstract, 200).length;
+    const textCompleteness = abstractTokens >= 50 ? 1 : abstractTokens ? 0.65 : 0.35;
+    const peerConfidence = Math.min(1, Math.log1p(peers.length) / Math.log1p(250));
+    const noveltyConfidence = peerConfidence * textCompleteness;
     const noveltyScore = clamp(50 + noveltyConfidence * (rawNovelty - 50));
 
     const researcher = scoreResearcherAuthorship(work, authorMap);
@@ -238,6 +256,7 @@ export function scoreBatch(candidates, references, authors, options = {}) {
         bridgeRarity: bridge,
         incrementalMarkers: markers,
         penalty,
+        textCompleteness,
       },
       researcherEvidence: researcher.evidence,
       scoringVersion: SCORING_VERSION,

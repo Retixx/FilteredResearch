@@ -12,6 +12,7 @@ for (const entry of [
   "assets",
   "LICENSE",
   "PRIVACY.md",
+  "COMPLIANCE.md",
 ]) {
   await cp(resolve(root, entry), resolve(destination, entry), { recursive: true });
 }

@@ -1,4 +1,8 @@
-import { normalizeCategoryIds } from "./filters.js";
+import {
+  legacySelection,
+  normalizeFieldIds,
+  normalizeSubfieldIds,
+} from "./filters.js";
 
 export const WINDOWS = Object.freeze({
   day: { label: "Past day", days: 1 },
@@ -10,23 +14,28 @@ export const WINDOWS = Object.freeze({
 
 export const DEFAULT_SETTINGS = Object.freeze({
   queries: [],
-  selectedCategories: [],
+  selectedFields: [],
+  selectedSubfields: [],
   englishOnly: true,
-  notificationsEnabled: true,
+  notificationsEnabled: false,
   defaultWindow: "week",
   defaultSort: "balanced",
-  minNovelty: 70,
-  minResearcher: 70,
+  noveltySelectivity: 70,
+  authorshipSelectivity: 70,
   refreshHours: 6,
-  broadSample: 160,
-  perQuery: 70,
-  historySample: 360,
-  historyPerQuery: 100,
+  broadSample: 500,
+  perQuery: 5000,
+  baselinePerSubfield: 320,
   historyYears: 3,
   maxQueries: 5,
-  maxAuthors: 700,
-  maxReferenceWorks: 1200,
+  maxAuthors: 50_000,
+  maxDiscoveryWorks: 50_000,
+  maxReferenceWorks: 6_000,
   maxPeerComparisons: 320,
+  incrementalLookbackDays: 2,
+  fullRebuildDays: 7,
+  fullScanBudgetUsd: 0.25,
+  incrementalScanBudgetUsd: 0.02,
   showArxivBadges: true,
 });
 
@@ -48,13 +57,23 @@ export const REFRESH_ALARM = "filteredresearch-refresh";
 
 export function normalizeSettings(value = {}) {
   const merged = { ...DEFAULT_SETTINGS, ...value };
+  merged.noveltySelectivity =
+    value.noveltySelectivity ?? value.minNovelty ?? DEFAULT_SETTINGS.noveltySelectivity;
+  merged.authorshipSelectivity =
+    value.authorshipSelectivity ?? value.minResearcher ?? DEFAULT_SETTINGS.authorshipSelectivity;
   merged.queries = Array.isArray(merged.queries)
     ? merged.queries
         .map((query) => String(query).trim())
         .filter(Boolean)
         .slice(0, DEFAULT_SETTINGS.maxQueries)
     : [];
-  merged.selectedCategories = normalizeCategoryIds(merged.selectedCategories);
+  const legacy = legacySelection(value.selectedCategories);
+  merged.selectedFields = normalizeFieldIds(value.selectedFields).length
+    ? normalizeFieldIds(value.selectedFields)
+    : legacy.fieldIds;
+  merged.selectedSubfields = normalizeSubfieldIds(value.selectedSubfields).length
+    ? normalizeSubfieldIds(value.selectedSubfields)
+    : legacy.subfieldIds;
   merged.defaultWindow = WINDOWS[merged.defaultWindow] ? merged.defaultWindow : "week";
   merged.defaultSort = ["balanced", "novelty", "researcher", "newest"].includes(
     merged.defaultSort,
@@ -63,17 +82,21 @@ export function normalizeSettings(value = {}) {
     : "balanced";
 
   const numericBounds = {
-    minNovelty: [0, 100],
-    minResearcher: [0, 100],
+    noveltySelectivity: [1, 100],
+    authorshipSelectivity: [1, 100],
     refreshHours: [1, 24],
-    broadSample: [25, 500],
-    perQuery: [10, 200],
-    historySample: [100, 1000],
-    historyPerQuery: [25, 300],
+    broadSample: [100, 1000],
+    perQuery: [100, 10_000],
+    baselinePerSubfield: [100, 500],
     historyYears: [1, 10],
-    maxAuthors: [100, 1500],
-    maxReferenceWorks: [200, 3000],
+    maxAuthors: [1000, 100_000],
+    maxDiscoveryWorks: [5000, 100_000],
+    maxReferenceWorks: [1000, 20_000],
     maxPeerComparisons: [50, 800],
+    incrementalLookbackDays: [1, 7],
+    fullRebuildDays: [3, 30],
+    fullScanBudgetUsd: [0.05, 0.75],
+    incrementalScanBudgetUsd: [0.005, 0.1],
   };
   for (const [key, [minimum, maximum]] of Object.entries(numericBounds)) {
     const parsed = Number(merged[key]);
@@ -83,7 +106,10 @@ export function normalizeSettings(value = {}) {
   }
   merged.showArxivBadges = Boolean(merged.showArxivBadges);
   merged.englishOnly = merged.englishOnly !== false;
-  merged.notificationsEnabled = merged.notificationsEnabled !== false;
+  merged.notificationsEnabled = Boolean(merged.notificationsEnabled);
+  delete merged.selectedCategories;
+  delete merged.minNovelty;
+  delete merged.minResearcher;
   return merged;
 }
 

@@ -2,8 +2,8 @@
   "manifest_version": 3,
   "name": "FilteredResearch",
   "short_name": "FilteredResearch",
-  "version": "0.2.0",
-  "description": "Find recent research ranked by idea novelty and established-researcher authorship.",
+  "version": "0.3.0",
+  "description": "Build a local, field-filtered research index ranked by novelty and authorship signals.",
   "minimum_chrome_version": "116",
   "icons": {
     "16": "assets/icon-16.png",
@@ -13,9 +13,11 @@
   },
   "permissions": [
     "alarms",
-    "notifications",
     "sidePanel",
     "storage"
+  ],
+  "optional_permissions": [
+    "notifications"
   ],
   "host_permissions": [
     "https://api.openalex.org/*"
@@ -45,6 +47,23 @@
       ],
       "css": [
         "src/content/arxiv.css"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "https://pubmed.ncbi.nlm.nih.gov/*",
+        "https://www.semanticscholar.org/*",
+        "https://openalex.org/*",
+        "https://scholar.google.com/*",
+        "https://doi.org/*",
+        "https://www.doi.org/*"
+      ],
+      "js": [
+        "src/content/research-sites.js"
+      ],
+      "css": [
+        "src/content/research-sites.css"
       ],
       "run_at": "document_idle"
     }

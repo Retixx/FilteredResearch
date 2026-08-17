@@ -5,7 +5,7 @@ Thanks for helping make research discovery less noisy.
 ## Principles
 
 - Keep ranking evidence visible.
-- Treat novelty and reputation as uncertain signals, never ground truth.
+- Treat novelty and authorship bibliometrics as uncertain signals, never ground truth.
 - Do not add institution prestige as a score.
 - Prefer open metadata and narrow permissions.
 - Keep the extension usable without a hosted backend or paid API.
@@ -15,10 +15,10 @@ Thanks for helping make research discovery less noisy.
 ## Local workflow
 
 1. Fork and clone the repository.
-2. Run `npm test` and `npm run check`.
-3. Load the repository root from `chrome://extensions` using **Load unpacked**.
+2. Run `npm test`, `npm run check`, and `npm run package`.
+3. Load `dist/filteredresearch-extension` from `chrome://extensions` using **Load unpacked**.
 4. Make a focused change with tests.
-5. Confirm the side panel, settings, and arXiv page behavior manually.
+5. Confirm the side panel, settings, arXiv behavior, and at least one other supported-site highlight manually.
 
 ## Pull requests
 

@@ -1,139 +1,77 @@
 # FilteredResearch
 
-FilteredResearch is a local-first Chrome extension that screens recent scholarly work on two separate axes:
+FilteredResearch v0.3 is a local-first Chrome extension that builds a recent research index for a chosen field, then ranks papers on two transparent signals:
 
-- **Novelty** — how different a paper appears from older, topic-adjacent work in the extension's local comparison set.
-- **Researcher** — the strength of the authors' established research track record, based on transparent OpenAlex bibliometrics.
+- **Novelty**: lexical distance from up to 320 older, field-adjacent OpenAlex papers, adjusted for evidence completeness, rare title phrases, cross-field combinations, and incremental wording.
+- **Authorship**: an established-track-record signal using author h-index, citations, recent citedness, works count, ORCID presence, and authorship role.
 
-It is a discovery aid, not a peer reviewer and not a truth machine. It gives you a smaller, inspectable feed without requiring a hosted service, user account, or AI API.
+Neither score proves scientific novelty, quality, correctness, reputation, or significance. They are screening heuristics for deciding what to inspect next.
 
-## What it does
+## What changed in v0.3
 
-- Opens as a persistent Chrome side panel.
-- Filters to **Past day**, **Past 3 days**, **Past week**, **Past 2 weeks**, or **Past month**.
-- Hard-filters by selectable research categories and up to five specific interests.
-- Sorts by best combined signal, novelty, researcher track record, or newest.
-- Screens at Chrome startup and refreshes in the background with `chrome.alarms`.
-- Sends native Chrome alerts and keeps a local new-paper inbox for newly qualifying work.
-- Stores papers, scores, author metrics, and comparison history locally in IndexedDB.
-- Shows compact score badges on arXiv lists and a score strip on arXiv abstract pages.
-- Explains every score with the nearest older paper, peer count, confidence, incremental-language flags, and top author evidence.
-- Uses only the OpenAlex API; it does not scrape publisher HTML or download papers.
+- Cursor-based discovery retrieves the complete selected 30-day OpenAlex result set up to 50,000 works instead of sampling 160 papers.
+- OpenAlex field and subfield filters use the current hierarchy; selecting a parent includes every subfield.
+- Fixed the production URL-ID mismatch that caused valid AI papers to be rejected by category filtering.
+- Selectivity is logarithmic and percentile-based. `1` retains nearly every field-matched paper; `80` targets the top 5% on each signal; `100` targets the top 0.02%.
+- A paper must clear both the novelty and authorship bars.
+- Titles are normalized for escaped HTML and common joined-word failures such as `EfficientTwo` and `FromFilamentary`.
+- Scheduled checks query only the newest two-day overlap; full 30-day rebuilds happen for a new scope or explicit rebuild.
+- Matching indexed papers are highlighted locally on arXiv, PubMed, Semantic Scholar, OpenAlex, Google Scholar, and DOI resolver pages.
+- Notifications are optional, and every user supplies their own OpenAlex key.
 
-## Install it locally
+## Install for development
 
-1. Download and unzip a FilteredResearch release, or clone this repository.
-2. Open `chrome://extensions` in Chrome.
-3. Turn on **Developer mode**.
-4. Choose **Load unpacked** and select the folder containing `manifest.json`.
-5. Pin FilteredResearch, then click its toolbar button to open the side panel.
-6. Open Settings, select broad categories, and optionally add up to five narrower interests. The first screen also builds a historical comparison set, so it can take about a minute.
+1. Clone this repository.
+2. Run `npm test`, `npm run check`, and `npm run package`.
+3. Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select `dist/filteredresearch-extension`.
+4. Open the extension settings, select **Computer Science → Artificial Intelligence** (or another scope), add a dedicated free OpenAlex API key, and save.
+5. Choose **Rebuild complete 30-day index**. Keep Chrome open while the initial index is built.
+6. Click the toolbar icon to open the side panel.
 
-Chrome 116 or later is required. The `notifications` permission is used only for papers that clear your filters and acceptance bar, and alerts can be disabled in Settings.
+An unpacked extension does not update itself from GitHub. Chrome Web Store installations update automatically after each submitted version is approved; see [docs/WEB_STORE_RELEASES.md](docs/WEB_STORE_RELEASES.md).
 
-### Filtering semantics
+## Coverage, time, and API use
 
-- Selected categories are joined with **OR**: AI *or* Physics, for example.
-- Typed interests are joined with **OR**.
-- If both groups are configured, a paper must match a selected category **and** at least one interest.
-- English-only filtering is on by default to avoid unreliable translated or malformed metadata.
-- Small interest typos are tolerated locally.
+Measured on August 17, 2026, an English AI 30-day query returned 9,554 article/preprint records across 96 cursor pages with no duplicate IDs. Enriching 10,409 priority authors took 105 author pages. The production-shape run took roughly two minutes locally, used about 63 MiB of work-response data, peaked near 350 MiB of process memory, and was estimated around **$0.021** under the then-current OpenAlex per-call prices. Computer Science was approximately 20,920 works and should take roughly 3–5 minutes and about $0.05 on a comparable connection.
 
-### Optional: add a free OpenAlex key
+These are observations, not guarantees. OpenAlex coverage, pricing, limits, counts, and response times can change. A personal key prevents one publisher key from becoming a scaling bottleneck. The extension enforces `$0.25` for a full run and `$0.02` for a recent-only run; a stopped run reports the budget guard rather than continuing silently.
 
-Basic API use works without a key. A free key raises the available OpenAlex budget and is recommended for regular scans.
+At the default six-hour schedule, four recent-only checks have a combined worst-case guard of `$0.08/day`; normal cached AI checks should be much lower. Manual refreshes/rebuilds are additional and always use the installing user's allowance.
 
-1. Get a key from [OpenAlex API settings](https://openalex.org/settings/api).
-2. Open FilteredResearch Settings.
-3. Paste the key under **OpenAlex access** and save.
+On that measured AI corpus, setting both sliders equally retained 9,554 papers at `1`, 3,201 at `40`, 213 at `60`, 8 at `80`, and 0 at `90` or `100`. The exact intersection changes with the field, month, ties, and correlation between the signals.
 
-The key stays in `chrome.storage.local` in your Chrome profile. It is sent only to `api.openalex.org`.
+Without a key, the extension clearly labels a limited preview and retrieves at most 500 selected papers. With no field selected, it intentionally uses a rotating cross-disciplinary preview because indexing every field for every user would be expensive and unfocused.
 
-## How ranking works
+## How scoring and selectivity work
 
-The scores are deliberately separate. A paper clears the default feed if either score is at least 70.
+See [docs/SCORING.md](docs/SCORING.md) for formulas and limitations.
 
-### Novelty score
+The slider is not a raw-score cutoff. It maps to a percentile within the filtered time window:
 
-Novelty is relative to the extension's own historical sample, not to all human knowledge. The scorer:
+| Selectivity | Approximate fraction retained per signal |
+| ---: | ---: |
+| 1 | nearly all |
+| 20 | top 75% |
+| 40 | top 50% |
+| 60 | top 20% |
+| 80 | top 5% |
+| 90 | top 1% |
+| 100 | top 0.02% |
 
-1. chooses older papers from the same OpenAlex subfield, then domain, then the wider comparison set;
-2. computes TF–IDF cosine distance over titles and abstracts;
-3. adds smaller signals for rare title phrases and unusual field combinations;
-4. penalizes phrases often associated with explicitly incremental work, such as “enhanced” or “variant of”;
-5. shrinks the result toward 50 when too few comparison papers are available.
+Because both bars must be cleared, the final set is usually smaller than either percentage alone. Small corpora always retain at least the highest paper on a signal, so exact counts depend on ties and score correlation.
 
-The evidence drawer reports the nearest older paper and the comparison count. A high score with low confidence is a lead to inspect, not a verdict.
+## Privacy and permissions
 
-### Researcher score
+There is no FilteredResearch backend, analytics, advertising, or telemetry. Public scholarly metadata and scores stay in extension-owned IndexedDB. The personal API key stays in local Chrome extension storage and is hidden from content scripts. Supported research pages are inspected locally only for visible highlighting; those page values are not sent to OpenAlex or the developer.
 
-For each enriched author, the extension combines:
+Read [PRIVACY.md](PRIVACY.md) and the engineering release gate in [COMPLIANCE.md](COMPLIANCE.md). The extension requests no tabs, history, cookies, identity, clipboard, or all-sites access. Notifications are optional.
 
-- h-index: 45%
-- career citations: 25%
-- two-year mean citedness: 15%
-- works count: 10%
-- ORCID identity signal: 5%
+## Data source and licenses
 
-Logarithmic scaling prevents extremely large careers from overwhelming the score. First, last, and corresponding authors receive full role weight; middle authors receive 86%. The paper score is 82% the strongest authorship signal and 18% the team median.
+FilteredResearch uses [OpenAlex](https://openalex.org/) scholarly metadata. OpenAlex states that [its data is released under CC0](https://help.openalex.org/hc/en-us/articles/24396686889751-About-us); API use remains subject to its [current Terms](https://openalex.org/OpenAlex_termsofservice.pdf) and service limits. FilteredResearch is not affiliated with or endorsed by OpenAlex or any highlighted research site.
 
-This measures an **established track record**, not intelligence, integrity, or paper quality. Bibliometrics vary by field and career stage, and OpenAlex author disambiguation can be wrong. Institution prestige is intentionally excluded.
+Project source code is licensed under Apache-2.0. Development was assisted by OpenAI Codex; this project is not affiliated with or endorsed by OpenAI. Contributors must verify the license of any new dependencies, copied code, fonts, or assets.
 
-### Best-signal ranking
+## Contributing and security
 
-The default combined score is `72% × stronger axis + 28% × weaker axis`. That makes the feed an OR-style discovery system: an unusually novel paper from unknown authors can surface, and a new paper by an established researcher can surface even before novelty evidence is strong.
-
-See [docs/SCORING.md](docs/SCORING.md) for formulas and [SPEC.md](SPEC.md) for the product and architecture specification.
-
-## Coverage and scale
-
-OpenAlex contains a very large cross-disciplinary graph, so a free browser extension cannot exhaustively inspect every new work. FilteredResearch uses bounded lanes:
-
-- a rotating broad sample for serendipity;
-- recent search results for each configured interest;
-- a rotating three-year historical sample for novelty comparisons.
-
-The default run screens roughly 160 broad papers plus 70 per interest and enriches up to 700 author profiles. Runs are deduplicated locally. Candidate papers are retained for 60 days; the visible feed stops at one month. Results are not capped at 100—the panel renders them in batches of 60 to stay responsive.
-
-For serious use, configure focused interests. “Everything in science” produces a diverse sample, not exhaustive coverage.
-
-## Development
-
-No build step or runtime dependencies are required. The extension is plain Manifest V3 JavaScript, HTML, and CSS.
-
-```bash
-npm test
-npm run check
-npm run package
-```
-
-`npm run package` stages a clean load-unpacked folder at `dist/filteredresearch-extension`.
-
-## Releases and automatic updates
-
-GitHub Actions validates and packages every `main` push. Chrome cannot update a developer-mode, unpacked extension directly from GitHub on Windows or macOS. True hands-off browser updates require the Chrome Web Store version; the included publishing workflow can upload and submit each `main` update after the one-time store listing and repository secrets are configured. See [docs/WEB_STORE_RELEASES.md](docs/WEB_STORE_RELEASES.md).
-
-Project layout:
-
-```text
-manifest.json                 Chrome permissions and entry points
-src/background/              refresh orchestration and message API
-src/shared/                  OpenAlex, IndexedDB, settings, and scoring
-src/sidepanel/               research feed UI
-src/options/                 settings UI
-src/notifications/           local new-paper inbox
-src/content/                 arXiv score overlays
-test/                        dependency-free Node tests
-```
-
-## Privacy
-
-FilteredResearch has no analytics, account system, or project-owned server. It requests access only to OpenAlex plus a content script on arXiv. See [PRIVACY.md](PRIVACY.md).
-
-## Contributing
-
-Contributions are welcome. Good first projects include field-aware bibliometric calibration, additional open metadata adapters, stronger novelty baselines, accessible score explanations, and Firefox support. Read [CONTRIBUTING.md](CONTRIBUTING.md) first.
-
-## License
-
-Apache-2.0. See [LICENSE](LICENSE).
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report vulnerabilities privately as described in [SECURITY.md](SECURITY.md).

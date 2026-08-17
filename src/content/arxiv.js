@@ -20,8 +20,8 @@
   function makeBadge(work) {
     const badge = document.createElement("span");
     badge.className = "filteredresearch-badge";
-    badge.textContent = `N ${Math.round(work.noveltyScore || 0)} · R ${Math.round(work.researcherScore || 0)}`;
-    badge.title = `FilteredResearch — novelty ${Math.round(work.noveltyScore || 0)}, researcher ${Math.round(work.researcherScore || 0)}`;
+    badge.textContent = `N ${Math.round(work.noveltyScore || 0)} · A ${Math.round(work.researcherScore || 0)}`;
+    badge.title = `FilteredResearch — novelty ${Math.round(work.noveltyScore || 0)}, authorship ${Math.round(work.researcherScore || 0)}`;
     return badge;
   }
 
@@ -42,7 +42,13 @@
       type: "SCORE_ARXIV_PAGE",
       payload: { title, arxivId },
     });
-    if (scored?.ok) work = scored.result;
+    if (scored?.ok && scored.result) {
+      const qualified = await chrome.runtime.sendMessage({
+        type: "GET_ARXIV_SCORES",
+        payload: { ids: [arxivId] },
+      });
+      if (qualified?.ok) work = qualified.result?.[arxivId];
+    }
   }
   if (!work || !titleElement || document.querySelector(".filteredresearch-abs-score")) return;
 
@@ -56,7 +62,7 @@
   noveltyValue.textContent = Math.round(work.noveltyScore || 0);
   novelty.append(noveltyValue);
   const researcher = document.createElement("div");
-  researcher.append("Researcher ");
+  researcher.append("Authorship ");
   const researcherValue = document.createElement("strong");
   researcherValue.textContent = Math.round(work.researcherScore || 0);
   researcher.append(researcherValue);

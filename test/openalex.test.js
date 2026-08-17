@@ -26,6 +26,10 @@ test("cleanScholarlyText decodes markup and repairs concatenated title words", (
     cleanScholarlyText("Graphdiyne: An EfficientTwo-Dimensional PlatformAdvanced Photodetection"),
     "Graphdiyne: An Efficient Two-Dimensional Platform Advanced Photodetection",
   );
+  assert.equal(
+    cleanScholarlyText("FromFilamentary Failure to Durable Halide Perovskite Memristors"),
+    "From Filamentary Failure to Durable Halide Perovskite Memristors",
+  );
 });
 
 test("normalizeWork extracts stable IDs, topics, authors and arXiv IDs", () => {

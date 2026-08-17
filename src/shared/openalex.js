@@ -48,7 +48,15 @@ export function cleanScholarlyText(value, { repairSpacing = true } = {}) {
     .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, " ");
   if (repairSpacing) {
     text = text
-      .replace(/\b([A-Z]?[a-zÀ-öø-ÿ]{4,})([A-Z][a-zÀ-öø-ÿ]{2,})\b/g, "$1 $2")
+      .replace(
+        /\b([A-Z][a-zÀ-öø-ÿ]{3,}|[a-zÀ-öø-ÿ]{4,})([A-Z][a-zÀ-öø-ÿ]{2,})\b/g,
+        (match, left, right) =>
+          new Set(["OpenAlex", "GitHub", "YouTube", "iPhone", "eBay", "arXiv", "LaTeX"]).has(
+            match,
+          )
+            ? match
+            : `${left} ${right}`,
+      )
       .replace(/([,;:!?])(?=[A-Za-zÀ-öø-ÿ])/g, "$1 ");
   }
   return text.replace(/\s+/g, " ").trim();
@@ -93,12 +101,12 @@ function topicParts(topic = {}) {
   return {
     topicId: shortOpenAlexId(topic.id) || null,
     topicName: cleanScholarlyText(topic.display_name, { repairSpacing: false }) || null,
-    subfieldId: topic.subfield?.id != null ? String(topic.subfield.id) : null,
+    subfieldId: shortOpenAlexId(topic.subfield?.id) || null,
     subfieldName:
       cleanScholarlyText(topic.subfield?.display_name, { repairSpacing: false }) || null,
-    fieldId: topic.field?.id != null ? String(topic.field.id) : null,
+    fieldId: shortOpenAlexId(topic.field?.id) || null,
     fieldName: cleanScholarlyText(topic.field?.display_name, { repairSpacing: false }) || null,
-    domainId: topic.domain?.id != null ? String(topic.domain.id) : null,
+    domainId: shortOpenAlexId(topic.domain?.id) || null,
     domainName: cleanScholarlyText(topic.domain?.display_name, { repairSpacing: false }) || null,
     score: Number(topic.score || 0),
   };
@@ -192,13 +200,24 @@ export function cleanWorkForDisplay(work) {
 }
 
 export class OpenAlexClient {
-  constructor({ apiKey = "", timeoutMs = 25_000 } = {}) {
+  constructor({ apiKey = "", timeoutMs = 25_000, maxEstimatedCostUsd = Infinity } = {}) {
     this.apiKey = apiKey;
     this.timeoutMs = timeoutMs;
+    this.maxEstimatedCostUsd = maxEstimatedCostUsd;
     this.costUsd = 0;
+    this.estimatedCostUsd = 0;
   }
 
   async request(endpoint, parameters) {
+    const estimatedCost = parameters.search ? 0.001 : 0.0001;
+    if (this.estimatedCostUsd + estimatedCost > this.maxEstimatedCostUsd) {
+      const error = new Error(
+        `The OpenAlex budget guard stopped this scan at $${this.estimatedCostUsd.toFixed(4)}.`,
+      );
+      error.name = "OpenAlexBudgetError";
+      throw error;
+    }
+    this.estimatedCostUsd += estimatedCost;
     const url = new URL(`${API_ROOT}/${endpoint}`);
     for (const [key, value] of Object.entries(parameters)) {
       if (value !== undefined && value !== null && value !== "") {
@@ -240,15 +259,22 @@ export class OpenAlexClient {
     throw new Error("OpenAlex request failed after retries");
   }
 
-  static buildFilter(since, until, { fieldIds = [], englishOnly = false } = {}) {
+  static buildFilter(
+    since,
+    until,
+    { fieldIds = [], subfieldIds = [], englishOnly = false, requireAbstract = false } = {},
+  ) {
     const filters = [
       `from_publication_date:${since}`,
       `to_publication_date:${until}`,
-      "has_abstract:true",
       "type:article|preprint",
     ];
+    if (requireAbstract) filters.push("has_abstract:true");
     if (englishOnly) filters.push("language:en");
     if (fieldIds.length) filters.push(`primary_topic.field.id:${fieldIds.join("|")}`);
+    if (subfieldIds.length) {
+      filters.push(`primary_topic.subfield.id:${subfieldIds.join("|")}`);
+    }
     return filters.join(",");
   }
 
@@ -260,7 +286,9 @@ export class OpenAlexClient {
     seed,
     baseline = false,
     fieldIds = [],
+    subfieldIds = [],
     englishOnly = false,
+    requireAbstract = true,
   }) {
     if (limit <= 0) return [];
     const works = [];
@@ -268,7 +296,12 @@ export class OpenAlexClient {
     const pageSize = Math.min(100, limit);
     while (works.length < limit) {
       const parameters = {
-        filter: OpenAlexClient.buildFilter(since, until, { fieldIds, englishOnly }),
+        filter: OpenAlexClient.buildFilter(since, until, {
+          fieldIds,
+          subfieldIds,
+          englishOnly,
+          requireAbstract,
+        }),
         per_page: pageSize,
         page,
         select: WORK_FIELDS,
@@ -291,7 +324,60 @@ export class OpenAlexClient {
     return works.slice(0, limit);
   }
 
-  async fetchAuthors(authorIds) {
+  async fetchWorksCursor({
+    since,
+    until,
+    limit = 50_000,
+    query = "",
+    baseline = false,
+    fieldIds = [],
+    subfieldIds = [],
+    englishOnly = false,
+    requireAbstract = false,
+    onProgress = null,
+  }) {
+    const works = [];
+    const seen = new Set();
+    let cursor = "*";
+    let pages = 0;
+    let total = null;
+    while (cursor && works.length < limit) {
+      const parameters = {
+        filter: OpenAlexClient.buildFilter(since, until, {
+          fieldIds,
+          subfieldIds,
+          englishOnly,
+          requireAbstract,
+        }),
+        per_page: 100,
+        cursor,
+        select: WORK_FIELDS,
+      };
+      if (query) parameters.search = query;
+      const payload = await this.request("works", parameters);
+      const results = payload.results || [];
+      total ??= Number(payload.meta?.count || 0);
+      pages += 1;
+      for (const item of results) {
+        const work = normalizeWork(item, { baseline });
+        if (!work.id || seen.has(work.id)) continue;
+        seen.add(work.id);
+        works.push(work);
+        if (works.length >= limit) break;
+      }
+      await onProgress?.({ fetched: works.length, total, pages });
+      cursor = payload.meta?.next_cursor || null;
+      if (!results.length) break;
+    }
+    return {
+      works,
+      total: total || works.length,
+      pages,
+      truncated: works.length < (total || works.length) && works.length >= limit,
+    };
+  }
+
+  async fetchAuthors(authorIds, { onProgress = null } = {}) {
     const unique = [...new Set(authorIds.filter(Boolean))];
     const authors = [];
     for (let offset = 0; offset < unique.length; offset += 100) {
@@ -302,8 +388,54 @@ export class OpenAlexClient {
         select: AUTHOR_FIELDS,
       });
       authors.push(...(payload.results || []).map(normalizeAuthor));
+      await onProgress?.({
+        fetched: Math.min(offset + batch.length, unique.length),
+        total: unique.length,
+        pages: Math.floor(offset / 100) + 1,
+      });
     }
     return authors.filter((author) => author.id);
+  }
+
+  async fetchTaxonomy() {
+    const fieldsPayload = await this.request("fields", {
+      per_page: 100,
+      page: 1,
+      select: "id,display_name,domain",
+    });
+    const subfields = [];
+    for (let page = 1; page <= 3; page += 1) {
+      const payload = await this.request("subfields", {
+        per_page: 100,
+        page,
+        select: "id,display_name,field,domain",
+      });
+      subfields.push(...(payload.results || []));
+      if ((payload.results || []).length < 100) break;
+    }
+    const fields = (fieldsPayload.results || [])
+      .map((field) => ({
+        id: shortOpenAlexId(field.id),
+        name: cleanScholarlyText(field.display_name, { repairSpacing: false }),
+        domainName: cleanScholarlyText(field.domain?.display_name, { repairSpacing: false }),
+      }))
+      .filter((field) => field.id && field.name);
+    const byField = new Map(fields.map((field) => [field.id, { ...field, subfields: [] }]));
+    for (const subfield of subfields) {
+      const fieldId = shortOpenAlexId(subfield.field?.id);
+      const parent = byField.get(fieldId);
+      if (!parent) continue;
+      parent.subfields.push({
+        id: shortOpenAlexId(subfield.id),
+        name: cleanScholarlyText(subfield.display_name, { repairSpacing: false }),
+      });
+    }
+    return [...byField.values()]
+      .map((field) => ({
+        ...field,
+        subfields: field.subfields.sort((left, right) => left.name.localeCompare(right.name)),
+      }))
+      .sort((left, right) => left.name.localeCompare(right.name));
   }
 
   async findWorkByTitle(title) {

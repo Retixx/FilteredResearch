@@ -1,0 +1,21 @@
+.filteredresearch-site-match {
+  position: relative !important;
+  border: 1px solid #477c73 !important;
+  border-radius: 12px 3px 12px 3px !important;
+  box-shadow: 5px 5px 0 rgba(166, 210, 202, .36) !important;
+  padding: 10px !important;
+}
+
+.filteredresearch-site-badge {
+  display: block !important;
+  width: fit-content !important;
+  margin: 0 0 8px !important;
+  padding: 4px 7px !important;
+  border: 1px solid #111311 !important;
+  border-radius: 7px 2px 7px 2px !important;
+  background: #e8f3f0 !important;
+  color: #111311 !important;
+  font: 500 9px/1.2 "Helvetica Neue", "Segoe UI", Arial, sans-serif !important;
+  letter-spacing: .08em !important;
+  text-transform: uppercase !important;
+}

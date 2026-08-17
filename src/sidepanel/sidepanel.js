@@ -7,9 +7,12 @@ const state = {
   loading: false,
   papers: [],
   renderedCount: 0,
+  resultCount: 0,
+  hasMore: false,
 };
 
 const BATCH_SIZE = 60;
+const PAGE_SIZE = 120;
 
 const elements = {
   feed: document.querySelector("#feed"),
@@ -155,10 +158,14 @@ function renderNextBatch() {
     elements.feed.append(renderPaper(paper, state.renderedCount + index)),
   );
   state.renderedCount += next.length;
-  const remaining = state.papers.length - state.renderedCount;
+  const buffered = state.papers.length - state.renderedCount;
+  const remaining = Math.max(0, state.resultCount - state.renderedCount);
   elements.loadMore.hidden = remaining <= 0;
-  elements.loadMore.textContent = remaining > 0 ? `Load ${Math.min(BATCH_SIZE, remaining)} more · ${remaining} left` : "";
+  elements.loadMore.textContent = remaining > 0
+    ? `Load ${Math.min(BATCH_SIZE, remaining)} more · ${remaining} left`
+    : "";
   elements.shownCopy.textContent = remaining > 0 ? ` · showing ${state.renderedCount}` : "";
+  return buffered;
 }
 
 function updateNotificationBadge(count) {
@@ -196,15 +203,19 @@ async function loadFeed({ skeleton = true } = {}) {
       window: state.window,
       sort: state.sort,
       includeAll: state.includeAll,
+      offset: 0,
+      limit: PAGE_SIZE,
     });
     elements.feed.replaceChildren();
     state.papers = result.papers;
+    state.resultCount = result.resultCount;
+    state.hasMore = result.hasMore;
     state.renderedCount = 0;
     renderNextBatch();
-    elements.resultCount.textContent = String(result.papers.length);
+    elements.resultCount.textContent = String(result.resultCount);
     updateNotificationBadge(result.stats.unreadNotifications);
-    elements.empty.hidden = result.papers.length > 0;
-    elements.feed.hidden = result.papers.length === 0;
+    elements.empty.hidden = result.resultCount > 0;
+    elements.feed.hidden = result.resultCount === 0;
     const lastRefresh = result.stats.lastRefresh;
     elements.status.textContent = lastRefresh
       ? `Screened ${new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }).format(
@@ -212,10 +223,27 @@ async function loadFeed({ skeleton = true } = {}) {
           "hour",
         )}`
       : "Ready for the first screen";
-    if (result.stats.refreshState?.status === "error") {
+    const refreshState = result.stats.refreshState;
+    const coverage = result.coverage;
+    if (refreshState?.status === "running") {
+      const progress = refreshState.total
+        ? ` ${compactNumber(refreshState.fetched)} of ${compactNumber(refreshState.total)} fetched.`
+        : "";
+      showNotice(`Building ${refreshState.mode} index · ${refreshState.phase || "starting"}.${progress}`);
+      setTimeout(() => loadFeed({ skeleton: false }), 2500);
+    } else if (refreshState?.status === "error") {
       showNotice(result.stats.refreshState.message, "error");
+    } else if (coverage?.needsApiKey) {
+      showNotice(
+        `Limited preview: ${compactNumber(coverage.limitedRetrieved || 0)} of ${compactNumber(coverage.limitedAvailable || 0)} available papers checked. Add your personal OpenAlex key in settings for complete coverage.`,
+      );
+    } else if (coverage?.fullCompletedAt) {
+      showNotice(
+        `30-day index: ${compactNumber(coverage.retrieved)} of ${compactNumber(coverage.available)} papers retrieved (${Math.round(coverage.coveragePercent || 0)}% API coverage).`,
+        "success",
+      );
     } else if (!lastRefresh) {
-      showNotice("First run screens a rotating sample and builds a historical comparison set.");
+      showNotice("First run creates a limited preview. A personal key plus a selected field enables exhaustive indexing.");
     } else {
       showNotice("");
     }
@@ -229,11 +257,41 @@ async function loadFeed({ skeleton = true } = {}) {
   }
 }
 
+async function loadMore() {
+  if (state.loading) return;
+  if (state.renderedCount < state.papers.length) {
+    renderNextBatch();
+    return;
+  }
+  if (!state.hasMore) return;
+  state.loading = true;
+  elements.loadMore.disabled = true;
+  elements.loadMore.textContent = "Loading…";
+  try {
+    const result = await send("GET_FEED", {
+      window: state.window,
+      sort: state.sort,
+      includeAll: state.includeAll,
+      offset: state.papers.length,
+      limit: PAGE_SIZE,
+    });
+    state.papers.push(...result.papers);
+    state.resultCount = result.resultCount;
+    state.hasMore = result.hasMore;
+    renderNextBatch();
+  } catch (error) {
+    showNotice(error.message, "error");
+  } finally {
+    state.loading = false;
+    elements.loadMore.disabled = false;
+  }
+}
+
 async function refresh() {
   if (state.loading) return;
   elements.refresh.classList.add("spinning");
   elements.refresh.disabled = true;
-  showNotice("Screening new research… this can take a minute.");
+  showNotice("Checking the newest papers… complete rebuilds are started from settings.");
   try {
     const result = await send("REFRESH");
     showNotice(
@@ -264,7 +322,7 @@ elements.showAll.addEventListener("click", () => {
   loadFeed();
 });
 elements.refresh.addEventListener("click", refresh);
-elements.loadMore.addEventListener("click", renderNextBatch);
+elements.loadMore.addEventListener("click", loadMore);
 elements.notifications.addEventListener("click", () => {
   chrome.tabs.create({ url: chrome.runtime.getURL("src/notifications/notifications.html") });
 });

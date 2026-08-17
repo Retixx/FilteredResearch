@@ -9,7 +9,7 @@
   <body>
     <header class="masthead">
       <div class="wordmark"><span>FR</span> FilteredResearch</div>
-      <p>Local screening configuration / v0.2</p>
+      <p>Local research index / v0.3</p>
     </header>
 
     <main>
@@ -17,8 +17,8 @@
         <p class="eyebrow">Settings</p>
         <h1>Define the edges of your research world.</h1>
         <p>
-          Categories and interests now act as hard filters. Leave both empty for a rotating,
-          cross-disciplinary sample.
+          Choose an OpenAlex field or drill into its subfields. A personal API key unlocks an
+          exhaustive 30-day index for the selected scope.
         </p>
       </section>
 
@@ -39,7 +39,7 @@
           <div class="section-number">02</div>
           <div class="section-copy">
             <h2>Research categories</h2>
-            <p>Choose one or more broad fields. When interests are also present, papers must match both.</p>
+            <p>Select an entire field in one click, or open it and choose individual subfields.</p>
           </div>
           <div class="section-control category-control">
             <details class="category-picker">
@@ -60,13 +60,18 @@
           <div class="section-number">03</div>
           <div class="section-copy">
             <h2>Acceptance bar</h2>
-            <p>A paper appears if it clears either threshold. Both scores remain visible.</p>
+            <p>Each logarithmic control keeps the strongest percentile on that signal. A paper must clear both.</p>
           </div>
           <div class="section-control range-grid">
-            <label for="min-novelty">Minimum novelty <output id="min-novelty-value">70</output></label>
-            <input id="min-novelty" type="range" min="0" max="100" step="1" />
-            <label for="min-researcher">Minimum researcher <output id="min-researcher-value">70</output></label>
-            <input id="min-researcher" type="range" min="0" max="100" step="1" />
+            <label for="novelty-selectivity">Novelty selectivity <output id="novelty-selectivity-value">70</output></label>
+            <input id="novelty-selectivity" type="range" min="1" max="100" step="1" />
+            <p id="novelty-guide" class="range-guide"></p>
+            <label for="authorship-selectivity">Authorship selectivity <output id="authorship-selectivity-value">70</output></label>
+            <input id="authorship-selectivity" type="range" min="1" max="100" step="1" />
+            <p id="authorship-guide" class="range-guide"></p>
+            <div class="selectivity-scale" aria-hidden="true">
+              <span><b>1</b> nearly all</span><span><b>40</b> top 50%</span><span><b>60</b> top 20%</span><span><b>80</b> top 5%</span><span><b>100</b> extreme</span>
+            </div>
           </div>
         </section>
 
@@ -90,7 +95,7 @@
               <select id="default-sort">
                 <option value="balanced">Best signal</option>
                 <option value="novelty">Novelty</option>
-                <option value="researcher">Researcher</option>
+                <option value="researcher">Authorship</option>
                 <option value="newest">Newest</option>
               </select>
             </label>
@@ -104,7 +109,7 @@
             </label>
             <label class="check-label">
               <input id="show-arxiv-badges" type="checkbox" />
-              Show score badges on arXiv
+              Highlight matching papers on supported research sites
             </label>
             <label class="check-label">
               <input id="notifications-enabled" type="checkbox" />
@@ -117,12 +122,15 @@
           <div class="section-number">05</div>
           <div class="section-copy">
             <h2>OpenAlex access</h2>
-            <p>Optional. A free key raises the API budget. It stays in this Chrome profile.</p>
+            <p>Your own free key is required for an exhaustive index. It stays in this Chrome profile and is never bundled or shared.</p>
           </div>
           <div class="section-control wide">
             <label for="api-key">API key</label>
-            <input id="api-key" type="password" autocomplete="off" placeholder="Optional" />
+            <input id="api-key" type="password" autocomplete="off" placeholder="Required for exhaustive indexing" />
             <a href="https://openalex.org/settings/api" target="_blank" rel="noreferrer">Get a free OpenAlex key ↗</a>
+            <button id="rebuild-index" class="secondary-action" type="button">Rebuild complete 30-day index</button>
+            <p class="fine-print">A focused AI scan was measured at about 2 minutes and $0.02 of OpenAlex allowance; broader fields take longer. Routine notifications only check the newest two days.</p>
+            <p class="fine-print">Requests go directly to OpenAlex and are subject to its <a href="https://openalex.org/OpenAlex_termsofservice.pdf" target="_blank" rel="noreferrer">Terms</a> and <a href="https://openalex.org/OpenAlex_privacy_policy.pdf" target="_blank" rel="noreferrer">Privacy Policy</a>.</p>
           </div>
         </section>
 
@@ -136,10 +144,14 @@
         <div>
           <p class="eyebrow">Local data</p>
           <h2>Nothing is sent to a FilteredResearch server.</h2>
-          <p>Papers and author metrics live in Chrome's extension storage. Removing the extension removes them.</p>
+          <p>Papers, author metrics, and your key live in Chrome's extension storage. On supported research sites, titles and identifiers are inspected locally only to mark papers already in your qualifying index.</p>
         </div>
         <button id="clear-data" type="button">Clear research database</button>
       </section>
+
+      <footer class="credits">
+        Open-source software developed with assistance from OpenAI Codex; not affiliated with or endorsed by OpenAI. Scores are discovery heuristics, not peer review or claims of scientific merit.
+      </footer>
     </main>
 
     <script type="module" src="options.js"></script>
