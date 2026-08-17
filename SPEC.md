@@ -1,10 +1,10 @@
-# FilteredResearch v0.4 specification
+# FilteredResearch v0.5 specification
 
 ## Product contract
 
 FilteredResearch is an open-source, local-first Chrome extension for finding recent papers that are both lexically unusual within their field and associated with an established authorship track record. It is not a publisher crawler, paper archive, citation recommender, peer-review substitute, or AI research product.
 
-The primary user chooses an OpenAlex field/subfield, builds a rolling one-year index, adjusts logarithmic novelty and authorship selectivity, and browses day/3-day/week/2-week/month/3-month/6-month/year views. Matching papers can be marked on supported scholarly sites and can generate optional notifications.
+The primary user chooses an OpenAlex field/subfield and a maximum discovery timeframe of 1, 3, 6, or 12 months in the sidebar. The one-month default avoids unnecessary calls; expanding the timeframe backfills only when cached coverage is insufficient.
 
 ## Functional requirements
 
@@ -16,13 +16,14 @@ The primary user chooses an OpenAlex field/subfield, builds a rolling one-year i
 - Require a user-owned OpenAlex key for exhaustive indexing. Never ship a shared key.
 - Without a key, label the result as a limited preview and retrieve no more than 500 works.
 - If no taxonomy field is selected, use a rotating cross-disciplinary preview rather than claiming exhaustive global coverage.
-- Scheduled/startup checks use a two-day overlap, group records by DOI/arXiv/title-author identity, and preserve the rolling one-year index.
+- Scheduled/startup checks use a two-day overlap, group records by normalized title plus author identity even across different DOIs, and preserve up to one year locally.
 - Full rebuild runs only for a new focused scope, a first keyed run, or explicit user action.
 - Enforce per-run guards of $0.75 full and $0.02 incremental by estimated OpenAlex request costs; show locally recorded daily usage in Settings.
 
 ### Filters
 
 - Fetch and cache the OpenAlex field/subfield taxonomy for 30 days, with a Computer Science fallback.
+- Present the exact official arXiv group/category codes and names, refreshed from arXiv and cached for 30 days; map them explicitly to OpenAlex discovery scopes without relabeling them as OpenAlex categories.
 - A parent field checkbox means every child subfield. Individual subfields may be selected instead.
 - Normalize taxonomy identifiers from both bare numeric IDs and current OpenAlex URL-shaped IDs.
 - Category and interest-query groups combine with AND; queries inside the interest group combine with OR.

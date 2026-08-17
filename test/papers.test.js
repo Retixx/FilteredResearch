@@ -3,8 +3,8 @@ import { groupDuplicatePapers } from "../src/shared/papers.js";
 import { annotateProminence, PROMINENCE_CATALOG_SIZE } from "../src/shared/prominence.js";
 test("duplicate publications become one paper with multiple sources", () => {
   const grouped = groupDuplicatePapers([
-    { id:"W1", title:"Same Paper", publicationDate:"2026-08-12", authorships:[{name:"A. Author"}], sourceName:"Open MIND", url:"https://a", noveltyScore:90 },
-    { id:"W2", title:"Same Paper", publicationDate:"2026-08-13", authorships:[{name:"A. Author"}], sourceName:"Zenodo", url:"https://b", noveltyScore:91 },
+    { id:"W1", doi:"https://doi.org/10.1/a", title:"Same Paper", publicationDate:"2026-08-12", authorships:[{name:"A. Author"}], sourceName:"Open MIND", url:"https://a", noveltyScore:90 },
+    { id:"W2", doi:"https://doi.org/10.1/b", title:"Same Paper", publicationDate:"2026-08-13", authorships:[{name:"A. Author"}], sourceName:"Zenodo", url:"https://b", noveltyScore:91 },
   ]);
   assert.equal(grouped.length, 1); assert.equal(grouped[0].sources.length, 2); assert.equal(grouped[0].duplicateCount, 2);
 });

@@ -1,9 +1,12 @@
 import { normalizeSearchText } from "./filters.js";
 export function normalizeDoi(value) { return String(value || "").toLowerCase().replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "").replace(/^doi:\s*/, "").trim(); }
 export function canonicalPaperKey(work) {
+  const title = normalizeSearchText(work.title);
+  const authors = (work.authorships || []).slice(0, 3).map((item) => normalizeSearchText(item.name)).filter(Boolean).join("|");
+  if (title && authors) return `title:${title}|authors:${authors}`;
   const doi = normalizeDoi(work.doi); if (doi) return `doi:${doi}`;
   if (work.arxivId) return `arxiv:${String(work.arxivId).replace(/v\d+$/i, "").toLowerCase()}`;
-  return `title:${normalizeSearchText(work.title)}|author:${normalizeSearchText(work.authorships?.[0]?.name || "")}`;
+  return `title:${title}|id:${work.id}`;
 }
 function fallbackSource(work) { return { name: work.sourceName || "OpenAlex record", url: work.url || work.doi || `https://openalex.org/${work.id}`, doi: work.doi || null }; }
 export function groupDuplicatePapers(works = []) {

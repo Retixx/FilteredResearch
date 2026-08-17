@@ -46,24 +46,29 @@ async function send(type, payload) {
 function selectedTaxonomy() {
   const fieldIds = [];
   const subfieldIds = [];
+  const arxivGroups = [];
+  const arxivCategories = [];
   for (const field of categoryOptions.querySelectorAll(".taxonomy-field")) {
     const parent = field.querySelector("input[data-field]");
     if (parent.checked) {
-      fieldIds.push(parent.value);
+      arxivGroups.push(parent.value);
+      fieldIds.push(...JSON.parse(parent.dataset.openalexFields || "[]"));
       continue;
     }
-    subfieldIds.push(
-      ...[...field.querySelectorAll("input[data-subfield]:checked")].map((input) => input.value),
-    );
+    for (const input of field.querySelectorAll("input[data-subfield]:checked")) {
+      arxivCategories.push(input.value);
+      fieldIds.push(...JSON.parse(input.dataset.openalexFields || "[]"));
+      subfieldIds.push(...JSON.parse(input.dataset.openalexSubfields || "[]"));
+    }
   }
-  return { fieldIds, subfieldIds };
+  return { fieldIds: [...new Set(fieldIds)], subfieldIds: [...new Set(subfieldIds)], arxivGroups, arxivCategories };
 }
 
 function updateCategorySummary() {
-  const { fieldIds, subfieldIds } = selectedTaxonomy();
+  const { arxivGroups, arxivCategories } = selectedTaxonomy();
   const pieces = [];
-  if (fieldIds.length) pieces.push(`${fieldIds.length} full field${fieldIds.length === 1 ? "" : "s"}`);
-  if (subfieldIds.length) pieces.push(`${subfieldIds.length} subfield${subfieldIds.length === 1 ? "" : "s"}`);
+  if (arxivGroups.length) pieces.push(`${arxivGroups.length} arXiv group${arxivGroups.length === 1 ? "" : "s"}`);
+  if (arxivCategories.length) pieces.push(`${arxivCategories.length} arXiv categor${arxivCategories.length === 1 ? "y" : "ies"}`);
   categorySummary.textContent = pieces.join(" · ") || "All research · preview mode";
 }
 
@@ -77,8 +82,8 @@ function syncParent(fieldElement) {
 }
 
 function renderTaxonomy(settings) {
-  const selectedFields = new Set(settings.selectedFields || []);
-  const selectedSubfields = new Set(settings.selectedSubfields || []);
+  const selectedGroups = new Set(settings.selectedArxivGroups || []);
+  const selectedCategories = new Set(settings.selectedArxivCategories || []);
   categoryOptions.replaceChildren();
   for (const field of taxonomy) {
     const details = document.createElement("details");
@@ -90,7 +95,8 @@ function renderTaxonomy(settings) {
     parent.type = "checkbox";
     parent.value = field.id;
     parent.dataset.field = field.id;
-    parent.checked = selectedFields.has(field.id);
+    parent.checked = selectedGroups.has(field.id);
+    parent.dataset.openalexFields = JSON.stringify(field.openAlexFieldIds || []);
     parent.addEventListener("click", (event) => event.stopPropagation());
     parent.addEventListener("change", () => {
       for (const child of details.querySelectorAll("input[data-subfield]")) {
@@ -115,7 +121,9 @@ function renderTaxonomy(settings) {
       input.type = "checkbox";
       input.value = subfield.id;
       input.dataset.subfield = subfield.id;
-      input.checked = parent.checked || selectedSubfields.has(subfield.id);
+      input.checked = parent.checked || selectedCategories.has(subfield.id);
+      input.dataset.openalexFields = JSON.stringify(subfield.openAlexFieldIds || []);
+      input.dataset.openalexSubfields = JSON.stringify(subfield.openAlexSubfieldIds || []);
       input.disabled = parent.checked;
       input.addEventListener("change", () => {
         syncParent(details);
@@ -192,6 +200,8 @@ form.addEventListener("submit", async (event) => {
       showArxivBadges: document.querySelector("#show-arxiv-badges").checked,
       selectedFields: selected.fieldIds,
       selectedSubfields: selected.subfieldIds,
+      selectedArxivGroups: selected.arxivGroups,
+      selectedArxivCategories: selected.arxivCategories,
       englishOnly: document.querySelector("#english-only").checked,
       notificationsEnabled,
       apiKey,
@@ -222,7 +232,7 @@ document.querySelector("#rebuild-index").addEventListener("click", async (event)
     return;
   }
   event.currentTarget.disabled = true;
-  status.textContent = "Rebuilding the rolling 1-year index… keep Chrome open; broad fields can take several minutes.";
+  status.textContent = "Rebuilding the index depth selected in the sidebar… keep Chrome open while it runs.";
   try {
     const result = await send("REBUILD");
     status.textContent = `Indexed ${result.indexedRetrieved} papers; estimated OpenAlex cost $${Number(result.estimatedApiCostUsd || 0).toFixed(3)}.`;

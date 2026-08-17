@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "FilteredResearch",
   "short_name": "FilteredResearch",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Build a local, field-filtered research index ranked by novelty and authorship signals.",
   "minimum_chrome_version": "116",
   "icons": {
@@ -20,7 +20,9 @@
     "notifications"
   ],
   "host_permissions": [
-    "https://api.openalex.org/*"
+    "https://api.openalex.org/*",
+    "https://arxiv.org/*",
+    "https://export.arxiv.org/*"
   ],
   "background": {
     "service_worker": "src/background/service-worker.js",

@@ -469,6 +469,22 @@ export class OpenAlexClient {
     const match = (payload.results || []).find((item) => normalizeText(item.title) === target);
     return match ? normalizeWork(match) : null;
   }
+
+  async findWorksByTitles(titles = []) {
+    const requested = [...new Set(titles.map((title) => cleanScholarlyText(title)).filter(Boolean))];
+    const byTitle = new Map();
+    for (let offset = 0; offset < requested.length; offset += 16) {
+      const batch = requested.slice(offset, offset + 16);
+      const search = batch.map((title) => `"${title.replace(/["\\]/g, " ")}"`).join(" OR ");
+      const payload = await this.request("works", { search, per_page: 100, select: WORK_FIELDS });
+      const wanted = new Set(batch.map(normalizeText));
+      for (const item of payload.results || []) {
+        const normalized = normalizeText(item.title);
+        if (wanted.has(normalized) && !byTitle.has(normalized)) byTitle.set(normalized, normalizeWork(item));
+      }
+    }
+    return requested.map((title) => byTitle.get(normalizeText(title))).filter(Boolean);
+  }
 }
 
 function normalizeText(value) {

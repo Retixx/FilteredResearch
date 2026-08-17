@@ -103,7 +103,13 @@ export function hasCategoryEvidence(work) {
 export function matchesResearchFilters(work, settings = {}) {
   if (settings.englishOnly && work.language !== "en") return false;
   const selection = selectionFromSettings(settings);
-  if ((selection.fieldIds.length || selection.subfieldIds.length) && !selection.fieldIds.includes(taxonomyId(work.fieldId)) && !selection.subfieldIds.includes(taxonomyId(work.subfieldId))) return false;
+  const arxivCategories = Array.isArray(work.arxivCategories) ? work.arxivCategories : [];
+  const selectedArxivCategories = Array.isArray(settings.selectedArxivCategories) ? settings.selectedArxivCategories : [];
+  const selectedArxivGroups = Array.isArray(settings.selectedArxivGroups) ? settings.selectedArxivGroups : [];
+  const exactArxivScope = arxivCategories.length > 0 && (selectedArxivCategories.length > 0 || selectedArxivGroups.length > 0);
+  if (arxivCategories.length && selectedArxivCategories.length && !arxivCategories.some((code) => selectedArxivCategories.includes(code))) return false;
+  if (arxivCategories.length && selectedArxivGroups.length && !arxivCategories.some((code) => selectedArxivGroups.some((group) => code === group || code.startsWith(`${group}.`) || (group === "physics" && !/^(cs|econ|eess|math|q-bio|q-fin|stat)\./.test(code))))) return false;
+  if (!exactArxivScope && (selection.fieldIds.length || selection.subfieldIds.length) && !selection.fieldIds.includes(taxonomyId(work.fieldId)) && !selection.subfieldIds.includes(taxonomyId(work.subfieldId))) return false;
   if (!hasCategoryEvidence(work)) return false;
   const queries = Array.isArray(settings.queries) ? settings.queries.map(String).map((query) => query.trim()).filter(Boolean) : [];
   return !queries.length || Boolean(interestMatchEvidence(work, queries));
@@ -113,5 +119,5 @@ export function discoveryScopeSignature(settings = {}) {
   return JSON.stringify({ fields: [...selection.fieldIds].sort(), subfields: [...selection.subfieldIds].sort(), englishOnly: Boolean(settings.englishOnly) });
 }
 export function researchFilterSignature(settings = {}) {
-  return JSON.stringify({ scope: JSON.parse(discoveryScopeSignature(settings)), queries: (settings.queries || []).map(normalizeSearchText).filter(Boolean).sort() });
+  return JSON.stringify({ scope: JSON.parse(discoveryScopeSignature(settings)), arxivGroups: [...(settings.selectedArxivGroups || [])].sort(), arxivCategories: [...(settings.selectedArxivCategories || [])].sort(), queries: (settings.queries || []).map(normalizeSearchText).filter(Boolean).sort() });
 }

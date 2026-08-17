@@ -50,6 +50,14 @@ const FALLBACK_TAXONOMY = Object.freeze([
   },
 ]);
 
+const ARXIV_GROUP_FIELDS = Object.freeze({
+  cs: ["17"], econ: ["20"], eess: ["21", "22"], math: ["26"], physics: ["31"],
+  "q-bio": ["11", "13", "24", "34"], "q-fin": ["14", "20"], stat: ["18"],
+});
+const ARXIV_CS_SUBFIELDS = Object.freeze({
+  "cs.AI":["1702"],"cs.AR":["1708"],"cs.CC":["1703"],"cs.CE":["1706"],"cs.CG":["1704"],"cs.CL":["1702"],"cs.CR":["1710"],"cs.CV":["1707"],"cs.CY":["1709"],"cs.DB":["1710"],"cs.DC":["1705"],"cs.DL":["1710"],"cs.DM":["1703"],"cs.DS":["1703"],"cs.ET":["1708"],"cs.FL":["1703"],"cs.GL":["17"],"cs.GR":["1704"],"cs.GT":["1703"],"cs.HC":["1709"],"cs.IR":["1710"],"cs.IT":["1711"],"cs.LG":["1702"],"cs.LO":["1703"],"cs.MA":["1702"],"cs.MM":["1704"],"cs.MS":["1706"],"cs.NA":["1706"],"cs.NE":["1702"],"cs.NI":["1705"],"cs.OH":["17"],"cs.OS":["1712"],"cs.PF":["1705"],"cs.PL":["1712"],"cs.RO":["1702"],"cs.SC":["1706"],"cs.SD":["1711"],"cs.SE":["1712"],"cs.SI":["1710"],"cs.SY":["1706"],
+});
+
 let refreshPromise = null;
 let pendingRefreshReason = null;
 let usageAccumulator = null;
@@ -138,8 +146,8 @@ async function ensureAlarm() {
   }
 }
 
-async function getTaxonomy({ force = false } = {}) {
-  const cached = await getMetadata("taxonomy");
+async function getOpenAlexTaxonomy({ force = false } = {}) {
+  const cached = await getMetadata("openAlexTaxonomy");
   const fresh = Date.parse(cached?.fetchedAt || 0) >= Date.now() - 30 * 24 * 60 * 60 * 1000;
   if (!force && fresh && cached?.fields?.length) return cached.fields;
   try {
@@ -150,13 +158,54 @@ async function getTaxonomy({ force = false } = {}) {
     });
     const fields = await client.fetchTaxonomy();
     if (fields.length) {
-      await setMetadata("taxonomy", { fields, fetchedAt: new Date().toISOString() });
+      await setMetadata("openAlexTaxonomy", { fields, fetchedAt: new Date().toISOString() });
       return fields;
     }
   } catch (error) {
     console.warn("Taxonomy refresh failed", error);
   }
   return cached?.fields?.length ? cached.fields : FALLBACK_TAXONOMY;
+}
+
+function parseArxivTaxonomy(html) {
+  const headingPattern = /<h2 class="accordion-head"[^>]*id="accordion-head-grp_([^"]+)"[\s\S]*?<button[^>]*>[\s\S]*?<span[^>]*>[\s\S]*?<\/span>\s*([^<]+?)\s*<\/button>[\s\S]*?<\/h2>/gi;
+  const headings = [...html.matchAll(headingPattern)];
+  return headings.map((heading, index) => {
+    const groupId = heading[1];
+    const start = heading.index + heading[0].length;
+    const end = headings[index + 1]?.index || html.length;
+    const body = html.slice(start, end);
+    const categories = [...body.matchAll(/<h4>([^ <]+)\s*<span>\(([^<]+)\)<\/span><\/h4>/gi)].map((match) => {
+      const code = match[1].trim();
+      const mapped = ARXIV_CS_SUBFIELDS[code] || [];
+      const mappedFields = mapped.filter((id) => id.length <= 2);
+      const mappedSubfields = mapped.filter((id) => id.length > 2);
+      return { id: code, name: `${code} — ${match[2].trim()}`, arxivCode: code,
+        openAlexFieldIds: mappedFields.length ? mappedFields : mappedSubfields.length ? [] : ARXIV_GROUP_FIELDS[groupId] || [],
+        openAlexSubfieldIds: mappedSubfields };
+    });
+    return { id: groupId, name: heading[2].trim(), domainName: "arXiv", openAlexFieldIds: ARXIV_GROUP_FIELDS[groupId] || [], subfields: categories };
+  }).filter((group) => group.subfields.length);
+}
+
+async function getArxivTaxonomy({ force = false } = {}) {
+  const cached = await getMetadata("arxivTaxonomy");
+  const fresh = Date.parse(cached?.fetchedAt || 0) >= Date.now() - 30 * 24 * 60 * 60 * 1000;
+  if (!force && fresh && cached?.fields?.length) return cached.fields;
+  try {
+    const response = await fetch("https://arxiv.org/category_taxonomy", { headers: { Accept: "text/html" } });
+    if (!response.ok) throw new Error(`arXiv taxonomy returned ${response.status}`);
+    const fields = parseArxivTaxonomy(await response.text());
+    if (fields.length === 8 && fields.reduce((sum, field) => sum + field.subfields.length, 0) >= 150) {
+      await setMetadata("arxivTaxonomy", { fields, fetchedAt: new Date().toISOString(), source: "https://arxiv.org/category_taxonomy" });
+      return fields;
+    }
+    throw new Error("arXiv taxonomy response was incomplete");
+  } catch (error) {
+    console.warn("arXiv taxonomy refresh failed", error);
+    if (cached?.fields?.length) return cached.fields;
+    return [{ id: "cs", name: "Computer Science", domainName: "arXiv", openAlexFieldIds: ["17"], subfields: Object.entries(ARXIV_CS_SUBFIELDS).map(([id, mapped]) => ({ id, name: id, arxivCode: id, openAlexFieldIds: [], openAlexSubfieldIds: mapped.filter((value) => value.length > 2) })) }];
+  }
 }
 
 function expandedSubfieldIds(selection, taxonomy) {
@@ -413,7 +462,7 @@ async function recordNewPaperNotifications(
 
 async function performRefresh(reason = "manual") {
   const settings = await loadSettings();
-  const taxonomy = await getTaxonomy();
+  const taxonomy = await getOpenAlexTaxonomy();
   const signature = discoveryScopeSignature(settings);
   const coverageByScope = (await getMetadata("coverageByScope")) || {};
   const legacyCoverage = await getMetadata("discoveryCoverage");
@@ -423,7 +472,7 @@ async function performRefresh(reason = "manual") {
   const fullScan =
     Boolean(settings.apiKey) &&
     hasFocusedScope &&
-    (reason === "rebuild" || previousCoverage?.signature !== signature || !previousCoverage?.fullCompletedAt);
+    (reason === "rebuild" || previousCoverage?.signature !== signature || !previousCoverage?.fullCompletedAt || Number(previousCoverage?.horizonDays || 0) < settings.maxTimeframeDays);
   const mode = fullScan ? "full" : settings.apiKey && hasFocusedScope ? "incremental" : "limited";
   const startedAt = new Date().toISOString();
   const baseState = { reason, startedAt, mode, signature };
@@ -435,7 +484,7 @@ async function performRefresh(reason = "manual") {
     maxEstimatedCostUsd: fullScan ? settings.fullScanBudgetUsd : settings.incrementalScanBudgetUsd,
   });
   const until = isoDate();
-  const since = fullScan ? daysAgo(365) : mode === "limited" ? daysAgo(30) : daysAgo(settings.incrementalLookbackDays);
+  const since = fullScan ? daysAgo(settings.maxTimeframeDays) : mode === "limited" ? daysAgo(Math.min(30, settings.maxTimeframeDays)) : daysAgo(settings.incrementalLookbackDays);
 
   try {
     const [previousLastRefresh, previouslyStoredWorks] = await Promise.all([
@@ -456,7 +505,7 @@ async function performRefresh(reason = "manual") {
     );
     const candidates = discovery.works.map((work) => ({ ...work, isBaseline: false }));
 
-    const baseline = await maybeFetchBaseline(client, settings, taxonomy, daysAgo(365), writeProgress);
+    const baseline = await maybeFetchBaseline(client, settings, taxonomy, daysAgo(settings.maxTimeframeDays), writeProgress);
     if (baseline.length) await bulkPut("works", baseline);
 
     const existingAuthors = await getAll("authors");
@@ -506,6 +555,7 @@ async function performRefresh(reason = "manual") {
     const coverage = fullScan
       ? {
           signature, filterSignature: researchFilterSignature(settings),
+          horizonDays: settings.maxTimeframeDays,
           mode,
           available: discovery.total,
           retrieved: discovery.retrieved,
@@ -518,7 +568,7 @@ async function performRefresh(reason = "manual") {
           lastIncrementalAt: completedAt,
         }
       : {
-          ...(previousCoverage || {}), filterSignature: researchFilterSignature(settings),
+          ...(previousCoverage || {}), filterSignature: researchFilterSignature(settings), horizonDays: Math.max(Number(previousCoverage?.horizonDays || 0), settings.maxTimeframeDays),
           signature,
           mode,
           limitedAvailable: discovery.total,
@@ -546,7 +596,7 @@ async function performRefresh(reason = "manual") {
     const history = (await getMetadata("searchHistory")) || [];
     const currentFilterSignature = researchFilterSignature(settings);
     const historyEntry = { id: `${completedAt}:${Math.random().toString(36).slice(2)}`, filterSignature: currentFilterSignature, savedAt: completedAt,
-      settings: { queries: settings.queries, selectedFields: settings.selectedFields, selectedSubfields: settings.selectedSubfields, englishOnly: settings.englishOnly,
+      settings: { queries: settings.queries, selectedFields: settings.selectedFields, selectedSubfields: settings.selectedSubfields, selectedArxivGroups: settings.selectedArxivGroups, selectedArxivCategories: settings.selectedArxivCategories, englishOnly: settings.englishOnly,
         noveltySelectivity: settings.noveltySelectivity, authorshipSelectivity: settings.authorshipSelectivity, defaultWindow: settings.defaultWindow, defaultSort: settings.defaultSort },
       resultCount: (await qualifiedMonth(settings)).works.length, mode };
     await Promise.all([
@@ -673,7 +723,7 @@ async function getSiteMatches(items = []) {
   const byDoi = new Map();
   const byArxiv = new Map();
   const byTitle = new Map();
-  for (const work of qualified.works) {
+  for (const work of qualified.works.map(annotateProminence)) {
     if (work.doi) byDoi.set(normalizeDoi(work.doi), work);
     if (work.arxivId) byArxiv.set(work.arxivId, work);
     byTitle.set(normalizedTitle(work.title), work);
@@ -692,11 +742,71 @@ async function getSiteMatches(items = []) {
               title: cleanWorkForDisplay(work).title,
               noveltyScore: work.noveltyScore,
               researcherScore: work.researcherScore,
+              prominence: work.prominence || [],
+              authorshipOverride: Boolean(work.authorshipOverride),
             },
           ]]
         : [];
     }),
   );
+}
+
+function xmlValue(xml, tag) {
+  const match = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
+  return cleanWorkForDisplay({ title: match?.[1] || "" }).title;
+}
+
+async function fetchArxivFallback(items) {
+  const byId = new Map(items.filter((item) => item.arxivId).map((item) => [String(item.arxivId).replace(/v\d+$/i, ""), item]));
+  if (!byId.size) return [];
+  const url = new URL("https://export.arxiv.org/api/query");
+  url.searchParams.set("id_list", [...byId.keys()].join(","));
+  url.searchParams.set("max_results", String(byId.size));
+  const response = await fetch(url, { headers: { Accept: "application/atom+xml" } });
+  if (!response.ok) return [];
+  const xml = await response.text();
+  return [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/gi)].flatMap((match) => {
+    const entry = match[1];
+    const arxivId = xmlValue(entry, "id").split("/").at(-1)?.replace(/v\d+$/i, "");
+    const item = byId.get(arxivId);
+    if (!item) return [];
+    const authorships = [...entry.matchAll(/<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/gi)].map((author, index) => {
+      const name = cleanWorkForDisplay({ title: author[1] }).title;
+      return { authorId: `ARXIV-A-${normalizedTitle(name)}`, name, position: index === 0 ? "first" : "middle", isCorresponding: false, institutions: [], rawAffiliations: [] };
+    });
+    const categories = [...entry.matchAll(/<category[^>]*term=["']([^"']+)["']/gi)].map((category) => category[1]);
+    return [{ id: `ARXIV-${arxivId}`, arxivId, title: xmlValue(entry, "title"), abstract: xmlValue(entry, "summary"), language: "en",
+      publicationDate: xmlValue(entry, "published").slice(0, 10) || isoDate(), doi: null, url: `https://arxiv.org/abs/${arxivId}`,
+      sourceName: "arXiv", sources: [{ name: "arXiv", url: `https://arxiv.org/abs/${arxivId}`, doi: null }], workType: "preprint", authorships,
+      topics: [], arxivCategories: categories.length ? categories : item.categories || [], isBaseline: false, fetchedAt: new Date().toISOString() }];
+  });
+}
+
+async function screenSiteItems(items = []) {
+  const local = await getSiteMatches(items);
+  const unresolved = items.filter((item) => !local[item.key] && item.title).slice(0, 100);
+  if (!unresolved.length) return local;
+  const settings = await loadSettings();
+  const client = openAlexClient({ apiKey: settings.apiKey, maxEstimatedCostUsd: settings.incrementalScanBudgetUsd });
+  let resolved = [];
+  try { resolved = await client.findWorksByTitles(unresolved.map((item) => item.title)); }
+  catch (error) { console.warn("OpenAlex visible-paper lookup failed", error); }
+  const itemByTitle = new Map(unresolved.map((item) => [normalizedTitle(item.title), item]));
+  const resolvedTitles = new Set(resolved.map((work) => normalizedTitle(work.title)));
+  const arxivFallback = await fetchArxivFallback(unresolved.filter((item) => !resolvedTitles.has(normalizedTitle(item.title))));
+  const candidates = [...resolved.map((work) => {
+    const item = itemByTitle.get(normalizedTitle(work.title));
+    return { ...work, arxivId: work.arxivId || item?.arxivId || null, arxivCategories: item?.categories || [], isBaseline: false };
+  }), ...arxivFallback].filter((work) => matchesResearchFilters(work, settings));
+  if (!candidates.length) return local;
+  const authorIds = chooseAuthorIds(candidates, Math.min(settings.maxAuthors, 2_000));
+  const fetchedAuthors = await client.fetchAuthors(authorIds);
+  if (fetchedAuthors.length) await bulkPut("authors", fetchedAuthors);
+  const allAuthors = deduplicateAuthors([...(await getAll("authors")), ...fetchedAuthors]);
+  const references = selectReferences(await getAll("works"), settings.maxReferenceWorks);
+  const scored = scoreBatch(candidates, references, allAuthors, { maxPeerComparisons: settings.maxPeerComparisons });
+  await bulkPut("works", scored);
+  return getSiteMatches(items);
 }
 
 async function scoreArxivPage({ title, arxivId }) {
@@ -744,11 +854,18 @@ async function handleMessage(message) {
     case "GET_STATUS":
       return databaseStats();
     case "GET_TAXONOMY":
-      return getTaxonomy(message.payload || {});
+      return getArxivTaxonomy(message.payload || {});
     case "GET_API_USAGE":
       return (await getMetadata("apiUsageDaily")) || { date: isoDate(), requests: 0, costUsd: 0 };
     case "GET_SEARCH_HISTORY":
       return (await getMetadata("searchHistory")) || [];
+    case "SET_MAX_TIMEFRAME": {
+      const stored = await chrome.storage.sync.get("settings");
+      const next = normalizeSettings({ ...(stored.settings || {}), maxTimeframeDays: message.payload?.days });
+      await chrome.storage.sync.set({ settings: next });
+      refresh("timeframe").catch(console.error);
+      return { maxTimeframeDays: next.maxTimeframeDays };
+    }
     case "REFRESH":
       return refresh("manual");
     case "REBUILD":
@@ -764,6 +881,8 @@ async function handleMessage(message) {
       return getQualifiedArxivScores(message.payload?.ids || []);
     case "GET_SITE_MATCHES":
       return getSiteMatches(message.payload?.items || []);
+    case "SCREEN_SITE_ITEMS":
+      return screenSiteItems(message.payload?.items || []);
     case "SCORE_ARXIV_PAGE":
       return scoreArxivPage(message.payload || {});
     case "GET_NOTIFICATIONS":

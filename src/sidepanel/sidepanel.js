@@ -8,6 +8,7 @@ const state = {
   renderedCount: 0,
   resultCount: 0,
   hasMore: false,
+  maxTimeframeDays: DEFAULT_SETTINGS.maxTimeframeDays,
 };
 
 const BATCH_SIZE = 60;
@@ -28,6 +29,9 @@ const elements = {
   loadMore: document.querySelector("#load-more-button"),
   notifications: document.querySelector("#notifications-button"),
   notificationBadge: document.querySelector("#notification-badge"),
+  maxTimeframe: document.querySelector("#max-timeframe"),
+  maxWindowTab: document.querySelector("#max-window-tab"),
+  depthWarning: document.querySelector("#depth-warning"),
 };
 
 async function send(type, payload) {
@@ -121,12 +125,11 @@ function renderPaper(work, index) {
   const sources = fragment.querySelector(".paper-sources");
   const sourceList = (work.sources?.length ? work.sources : [{ name: work.sourceName || work.workType || "Research paper", url: work.url || work.doi }]).slice(0, 3);
   sourceList.forEach((source, sourceIndex) => {
-    if (sourceIndex) sources.append(document.createTextNode(" · "));
     const link = document.createElement("a"); link.className = "source-link"; link.target = "_blank"; link.rel = "noreferrer";
-    link.href = safeExternalUrl(source.url, `https://openalex.org/${work.id}`); link.textContent = source.name || `Source ${sourceIndex + 1}`; sources.append(link);
+    link.href = safeExternalUrl(source.url, `https://openalex.org/${work.id}`); link.textContent = `${sourceList.length > 1 ? `Source ${sourceIndex + 1} · ` : ""}${source.name || "Journal record"}`; sources.append(link);
   });
   const interest = fragment.querySelector(".paper-interest");
-  if (work.interestMatch) { interest.hidden = false; interest.textContent = `Matches “${work.interestMatch.query}” in ${work.interestMatch.location}: ${work.interestMatch.snippet}`; }
+  if (work.interestMatch) { interest.hidden = false; interest.textContent = `Matches “${work.interestMatch.query}” in the ${work.interestMatch.location}.`; }
 
   for (const [className, score] of [
     [".score-novelty", work.noveltyScore],
@@ -187,6 +190,13 @@ function updateNotificationBadge(count) {
 }
 
 function updateControls() {
+  const maxWindow = state.maxTimeframeDays === 365 ? "year" : state.maxTimeframeDays === 180 ? "6m" : state.maxTimeframeDays === 90 ? "3m" : "month";
+  elements.maxWindowTab.hidden = state.maxTimeframeDays <= 30;
+  elements.maxWindowTab.parentElement.classList.toggle("has-max", state.maxTimeframeDays > 30);
+  elements.maxWindowTab.dataset.window = maxWindow;
+  elements.maxWindowTab.textContent = { "3m": "3M", "6m": "6M", year: "1Y", month: "1M" }[maxWindow];
+  elements.maxTimeframe.value = String(state.maxTimeframeDays);
+  elements.depthWarning.hidden = state.maxTimeframeDays <= 90;
   for (const tab of elements.tabs) {
     const active = tab.dataset.window === state.window;
     tab.classList.toggle("active", active);
@@ -326,6 +336,20 @@ elements.sort.addEventListener("change", () => {
   state.sort = elements.sort.value;
   loadFeed();
 });
+elements.maxTimeframe.addEventListener("change", async () => {
+  const days = Number(elements.maxTimeframe.value);
+  elements.maxTimeframe.disabled = true;
+  try {
+    const result = await send("SET_MAX_TIMEFRAME", { days });
+    state.maxTimeframeDays = result.maxTimeframeDays;
+    const currentDays = WINDOWS[state.window]?.days || 7;
+    if (currentDays > state.maxTimeframeDays) state.window = state.maxTimeframeDays >= 30 ? "month" : "week";
+    updateControls();
+    showNotice(days > 90 ? "Expanding the local index. This first scan may take longer." : "Index depth updated.");
+    setTimeout(() => loadFeed({ skeleton: false }), 500);
+  } catch (error) { showNotice(error.message, "error"); }
+  finally { elements.maxTimeframe.disabled = false; }
+});
 elements.refresh.addEventListener("click", refresh);
 elements.loadMore.addEventListener("click", loadMore);
 elements.notifications.addEventListener("click", () => {
@@ -339,6 +363,8 @@ for (const button of [document.querySelector("#settings-button"), document.query
 chrome.storage.sync.get("settings").then(({ settings }) => {
   state.window = settings?.defaultWindow || state.window;
   state.sort = settings?.defaultSort || state.sort;
+  state.maxTimeframeDays = Number(settings?.maxTimeframeDays || state.maxTimeframeDays);
+  if ((WINDOWS[state.window]?.days || 7) > state.maxTimeframeDays) state.window = state.maxTimeframeDays >= 30 ? "month" : "week";
   updateControls();
   loadFeed();
 });

@@ -7,8 +7,8 @@ const ORGS = [
   ["AI2", "allen institute for ai|allen institute for artificial intelligence", "#5c6ac4"], ["Stanford HAI", "stanford institute for human centered artificial intelligence|stanford hai", "#8c1515"],
   ["MIT CSAIL", "mit csail|computer science and artificial intelligence laboratory", "#a31f34"], ["BAIR", "berkeley artificial intelligence research|bair", "#003262"],
   ["CMU ML", "carnegie mellon", "#c41230"], ["Mila", "mila", "#6b4eff"], ["Vector Institute", "vector institute", "#00a6a6"], ["Tsinghua AIR", "institute for ai industry research|tsinghua", "#6f2c91"],
-  ["Shanghai AI Lab", "shanghai artificial intelligence laboratory|shanghai ai laboratory", "#d12f2f"], ["IBM Research", "ibm research", "#0f62fe"], ["CERN", "cern", "#386cb0"],
-  ["NASA", "nasa", "#0b3d91"], ["Broad Institute", "broad institute", "#5b7f3a"], ["Max Planck", "max planck", "#006c66"],
+  ["Shanghai AI Lab", "shanghai artificial intelligence laboratory|shanghai ai laboratory", "#d12f2f"], ["IBM Research", "ibm research", "#0f62fe"], ["Google Research", "google research", "#4285f4"],
+  ["Toyota Research", "toyota research institute", "#eb0a1e"], ["Hugging Face", "hugging face", "#d5a400"], ["Salesforce AI", "salesforce ai research|salesforce research", "#0d9dda"],
 ];
 const PEOPLE = [
   "Yann LeCun", "Geoffrey Hinton", "Yoshua Bengio", "Demis Hassabis", "David Silver", "Fei Fei Li", "Andrew Ng", "Judea Pearl", "Michael I Jordan", "Jurgen Schmidhuber",

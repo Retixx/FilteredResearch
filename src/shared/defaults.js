@@ -19,6 +19,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   queries: [],
   selectedFields: [],
   selectedSubfields: [],
+  selectedArxivGroups: [],
+  selectedArxivCategories: [],
   englishOnly: true,
   notificationsEnabled: false,
   defaultWindow: "week",
@@ -36,6 +38,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   maxReferenceWorks: 6_000,
   maxPeerComparisons: 320,
   incrementalLookbackDays: 2,
+  maxTimeframeDays: 30,
   fullRebuildDays: 7,
   fullScanBudgetUsd: 0.75,
   incrementalScanBudgetUsd: 0.02,
@@ -77,6 +80,12 @@ export function normalizeSettings(value = {}) {
   merged.selectedSubfields = normalizeSubfieldIds(value.selectedSubfields).length
     ? normalizeSubfieldIds(value.selectedSubfields)
     : legacy.subfieldIds;
+  merged.selectedArxivGroups = Array.isArray(value.selectedArxivGroups) ? [...new Set(value.selectedArxivGroups.map(String).filter(Boolean))] : [];
+  merged.selectedArxivCategories = Array.isArray(value.selectedArxivCategories) ? [...new Set(value.selectedArxivCategories.map(String).filter(Boolean))] : [];
+  if (!merged.selectedArxivGroups.length && !merged.selectedArxivCategories.length) {
+    if (merged.selectedFields.includes("17")) merged.selectedArxivGroups = ["cs"];
+    else if (merged.selectedSubfields.includes("1702")) merged.selectedArxivCategories = ["cs.AI"];
+  }
   merged.defaultWindow = WINDOWS[merged.defaultWindow] ? merged.defaultWindow : "week";
   merged.defaultSort = ["balanced", "novelty", "researcher", "newest"].includes(
     merged.defaultSort,
@@ -97,6 +106,7 @@ export function normalizeSettings(value = {}) {
     maxReferenceWorks: [1000, 20_000],
     maxPeerComparisons: [50, 800],
     incrementalLookbackDays: [1, 7],
+    maxTimeframeDays: [30, 365],
     fullRebuildDays: [3, 30],
     fullScanBudgetUsd: [0.05, 0.75],
     incrementalScanBudgetUsd: [0.005, 0.1],
@@ -107,6 +117,7 @@ export function normalizeSettings(value = {}) {
       ? Math.min(maximum, Math.max(minimum, parsed))
       : DEFAULT_SETTINGS[key];
   }
+  merged.maxDiscoveryWorks = Math.max(merged.maxDiscoveryWorks, DEFAULT_SETTINGS.maxDiscoveryWorks);
   merged.showArxivBadges = Boolean(merged.showArxivBadges);
   merged.englishOnly = merged.englishOnly !== false;
   merged.notificationsEnabled = Boolean(merged.notificationsEnabled);

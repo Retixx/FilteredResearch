@@ -13,7 +13,7 @@ FilteredResearch is a local-first Chrome extension with no FilteredResearch-oper
 
 ## Network requests
 
-The background service worker sends HTTPS requests only to `https://api.openalex.org/` to retrieve public scholarly metadata, topic taxonomy, and author bibliometrics. If the user entered an OpenAlex key, it is attached to those OpenAlex requests. [OpenAlex's terms](https://openalex.org/OpenAlex_termsofservice.pdf) and [privacy policy](https://openalex.org/OpenAlex_privacy_policy.pdf) apply to its service.
+The background service worker sends HTTPS requests to `https://api.openalex.org/` for public scholarly metadata and author bibliometrics, and to arXiv's public category-taxonomy page to keep category codes/names aligned with arXiv. If the user entered an OpenAlex key, it is attached only to OpenAlex requests. [OpenAlex's terms](https://openalex.org/OpenAlex_termsofservice.pdf) and [privacy policy](https://openalex.org/OpenAlex_privacy_policy.pdf) apply to its service.
 
 Content scripts do not make external network requests. FilteredResearch does not transmit page URLs, browsing activity, research interests, scores, or locally indexed papers to its developer.
 
@@ -35,6 +35,8 @@ Users can:
 - `sidePanel`: display the primary interface.
 - optional `notifications`: show a native alert only after the user enables notifications.
 - `https://api.openalex.org/*`: retrieve OpenAlex scholarly metadata.
+- `https://arxiv.org/*`: retrieve arXiv's official public category taxonomy and run the existing on-page highlighter.
+- `https://export.arxiv.org/*`: batch-retrieve public metadata for visible arXiv papers not yet indexed by OpenAlex.
 - scoped content-script access to arXiv, PubMed, Semantic Scholar, OpenAlex, Google Scholar, and DOI resolver pages: locally highlight matching papers.
 
 FilteredResearch does not request `tabs`, `history`, `cookies`, `<all_urls>`, precise location, identity, or clipboard access.

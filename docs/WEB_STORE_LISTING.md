@@ -8,7 +8,7 @@ Build a local, field-filtered research index ranked by transparent novelty and a
 
 FilteredResearch helps you find recent papers that are both unusual relative to older work in the same field and associated with a strong authorship track record.
 
-Choose an OpenAlex field or subfield, supply your own free OpenAlex API key, and build a local rolling one-year index. Browse the past day, 3 days, week, 2 weeks, month, 3 months, 6 months, or year. Both novelty and authorship controls must pass; duplicates appear as one paper with multiple sources.
+Choose an OpenAlex field or subfield, supply your own free OpenAlex API key, and set a maximum index depth of 1, 3, 6, or 12 months directly in the sidebar. Both novelty and authorship controls must pass; duplicate journal records appear as one paper with separate source links.
 
 FilteredResearch also reads visible paper titles and scholarly identifiers when you visit supported arXiv, PubMed, Semantic Scholar, OpenAlex, Google Scholar, and DOI resolver pages. It does this solely to highlight papers that already clear your filters. Page content is compared locally, is not saved as browsing history, and is not sent to the developer or to a third party.
 

@@ -81,6 +81,11 @@
     badge.className = "filteredresearch-site-badge";
     badge.textContent = `FILTEREDRESEARCH · N ${Math.round(work.noveltyScore || 0)} · A ${Math.round(work.researcherScore || 0)}`;
     badge.title = "This paper clears your current local novelty and authorship filters.";
+    if (work.prominence?.length) {
+      badge.textContent += ` · ${work.prominence.map((marker) => marker.label).join(" / ")}`;
+      badge.style.setProperty("--fr-accent", work.prominence[0].color);
+      badge.classList.add("filteredresearch-site-prominent");
+    }
     container.prepend(badge);
   }
 
@@ -96,7 +101,7 @@
         doi: candidate.doi,
         arxivId: candidate.arxivId,
       }));
-      const response = await chrome.runtime.sendMessage({ type: "GET_SITE_MATCHES", payload: { items } });
+      const response = await chrome.runtime.sendMessage({ type: "SCREEN_SITE_ITEMS", payload: { items } });
       if (!response?.ok) return;
       const matches = response.result || {};
       candidates.forEach((candidate, index) => {

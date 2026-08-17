@@ -95,3 +95,9 @@ test("changing an interest does not invalidate the discovery scope cache", () =>
   const base = { selectedSubfields: ["1702"], englishOnly: true };
   assert.equal(discoveryScopeSignature({ ...base, queries: [] }), discoveryScopeSignature({ ...base, queries: ["agents"] }));
 });
+
+test("visible arXiv category codes enforce the exact selected arXiv category", () => {
+  const settings = { englishOnly: true, selectedArxivCategories: ["cs.MA"], selectedSubfields: ["1702"], queries: [] };
+  assert.equal(matchesResearchFilters({ ...aiWork, arxivCategories: ["cs.MA"] }, settings), true);
+  assert.equal(matchesResearchFilters({ ...aiWork, arxivCategories: ["cs.AI"] }, settings), false);
+});

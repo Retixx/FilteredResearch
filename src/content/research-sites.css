@@ -19,3 +19,4 @@
   letter-spacing: .08em !important;
   text-transform: uppercase !important;
 }
+.filteredresearch-site-badge.filteredresearch-site-prominent{border-color:var(--fr-accent,#477c73)!important;box-shadow:2px 2px 0 color-mix(in srgb,var(--fr-accent,#477c73) 25%,transparent)!important}

@@ -129,3 +129,17 @@ test("fetchWorks keeps a stable page size so sampled pages do not overlap", asyn
   assert.equal(works.length, 120);
   assert.equal(new Set(works.map((work) => work.id)).size, 120);
 });
+
+test("visible-site title lookup batches titles and keeps exact matches", async () => {
+  class FakeClient extends OpenAlexClient {
+    async request(_endpoint, parameters) {
+      assert.match(parameters.search, / OR /);
+      return { results: ["First Exact Paper", "Second Exact Paper", "Unrequested Paper"].map((title, index) => ({
+        id: `https://openalex.org/WB${index}`, title, language: "en", publication_date: "2026-08-17", type: "article",
+        abstract_inverted_index: { Abstract: [0] }, authorships: [], topics: [],
+      })) };
+    }
+  }
+  const works = await new FakeClient().findWorksByTitles(["First Exact Paper", "Second Exact Paper"]);
+  assert.deepEqual(works.map((work) => work.title), ["First Exact Paper", "Second Exact Paper"]);
+});
