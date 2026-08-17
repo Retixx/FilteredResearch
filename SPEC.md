@@ -1,24 +1,24 @@
-# FilteredResearch v0.5 specification
+# FilteredResearch v0.5.1 specification
 
 ## Product contract
 
 FilteredResearch is an open-source, local-first Chrome extension for finding recent papers that are both lexically unusual within their field and associated with an established authorship track record. It is not a publisher crawler, paper archive, citation recommender, peer-review substitute, or AI research product.
 
-The primary user chooses an OpenAlex field/subfield and a maximum discovery timeframe of 1, 3, 6, or 12 months in the sidebar. The one-month default avoids unnecessary calls; expanding the timeframe backfills only when cached coverage is insufficient.
+The primary user chooses an OpenAlex field/subfield and a maximum discovery timeframe of 1, 3, 6, or 12 months in the sidebar. Preferences are local-only; discovery starts exclusively through an explicit user refresh.
 
 ## Functional requirements
 
 ### Discovery
 
 - Use OpenAlex article/preprint metadata over HTTPS.
-- A focused initial scan uses cursor paging until the API result is exhausted or 50,000 unique works are retrieved.
+- A focused manual scan uses cursor paging until the API result is exhausted or 1,000,000 unique works are retrieved.
 - Report API total, retrieved count, truncation, coverage percentage, estimated cost, and progress.
 - Require a user-owned OpenAlex key for exhaustive indexing. Never ship a shared key.
 - Without a key, label the result as a limited preview and retrieve no more than 500 works.
 - If no taxonomy field is selected, use a rotating cross-disciplinary preview rather than claiming exhaustive global coverage.
-- Scheduled/startup checks use a two-day overlap, group records by normalized title plus author identity even across different DOIs, and preserve up to one year locally.
-- Full rebuild runs only for a new focused scope, a first keyed run, or explicit user action.
-- Enforce per-run guards of $0.75 full and $0.02 incremental by estimated OpenAlex request costs; show locally recorded daily usage in Settings.
+- Install, startup, settings saves, and depth changes make no discovery requests. Group records by normalized title plus author identity even across different DOIs and preserve up to one year locally.
+- Full discovery runs only after explicit user action and the prior saved feed remains available until completion.
+- Enforce a $0.95 full-pass guard by estimated OpenAlex request costs; show locally recorded daily usage in Settings.
 
 ### Filters
 

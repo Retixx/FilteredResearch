@@ -29,18 +29,18 @@ export const DEFAULT_SETTINGS = Object.freeze({
   authorshipSelectivity: 70,
   refreshHours: 6,
   broadSample: 500,
-  perQuery: 5000,
+  perQuery: 50_000,
   baselinePerSubfield: 320,
   historyYears: 3,
   maxQueries: 5,
   maxAuthors: 50_000,
-  maxDiscoveryWorks: 200_000,
+  maxDiscoveryWorks: 1_000_000,
   maxReferenceWorks: 6_000,
   maxPeerComparisons: 320,
   incrementalLookbackDays: 2,
   maxTimeframeDays: 30,
   fullRebuildDays: 7,
-  fullScanBudgetUsd: 0.75,
+  fullScanBudgetUsd: 0.95,
   incrementalScanBudgetUsd: 0.02,
   showArxivBadges: true,
 });
@@ -98,17 +98,17 @@ export function normalizeSettings(value = {}) {
     authorshipSelectivity: [1, 100],
     refreshHours: [1, 24],
     broadSample: [100, 1000],
-    perQuery: [100, 10_000],
+    perQuery: [100, 100_000],
     baselinePerSubfield: [100, 500],
     historyYears: [1, 10],
     maxAuthors: [1000, 100_000],
-    maxDiscoveryWorks: [5000, 250_000],
+    maxDiscoveryWorks: [5000, 1_000_000],
     maxReferenceWorks: [1000, 20_000],
     maxPeerComparisons: [50, 800],
     incrementalLookbackDays: [1, 7],
     maxTimeframeDays: [30, 365],
     fullRebuildDays: [3, 30],
-    fullScanBudgetUsd: [0.05, 0.75],
+    fullScanBudgetUsd: [0.05, 0.95],
     incrementalScanBudgetUsd: [0.005, 0.1],
   };
   for (const [key, [minimum, maximum]] of Object.entries(numericBounds)) {
@@ -117,7 +117,9 @@ export function normalizeSettings(value = {}) {
       ? Math.min(maximum, Math.max(minimum, parsed))
       : DEFAULT_SETTINGS[key];
   }
+  merged.perQuery = Math.max(merged.perQuery, DEFAULT_SETTINGS.perQuery);
   merged.maxDiscoveryWorks = Math.max(merged.maxDiscoveryWorks, DEFAULT_SETTINGS.maxDiscoveryWorks);
+  merged.fullScanBudgetUsd = Math.max(merged.fullScanBudgetUsd, DEFAULT_SETTINGS.fullScanBudgetUsd);
   merged.showArxivBadges = Boolean(merged.showArxivBadges);
   merged.englishOnly = merged.englishOnly !== false;
   merged.notificationsEnabled = Boolean(merged.notificationsEnabled);

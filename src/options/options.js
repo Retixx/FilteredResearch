@@ -161,7 +161,6 @@ async function populate() {
   authorship.value = settings.authorshipSelectivity;
   document.querySelector("#default-window").value = settings.defaultWindow;
   document.querySelector("#default-sort").value = settings.defaultSort;
-  document.querySelector("#refresh-hours").value = String(settings.refreshHours);
   document.querySelector("#show-arxiv-badges").checked = settings.showArxivBadges;
   document.querySelector("#english-only").checked = settings.englishOnly;
   document.querySelector("#notifications-enabled").checked = settings.notificationsEnabled;
@@ -196,7 +195,6 @@ form.addEventListener("submit", async (event) => {
       authorshipSelectivity: Number(authorship.value),
       defaultWindow: document.querySelector("#default-window").value,
       defaultSort: document.querySelector("#default-sort").value,
-      refreshHours: Number(document.querySelector("#refresh-hours").value),
       showArxivBadges: document.querySelector("#show-arxiv-badges").checked,
       selectedFields: selected.fieldIds,
       selectedSubfields: selected.subfieldIds,
@@ -209,9 +207,7 @@ form.addEventListener("submit", async (event) => {
     currentSettings = { ...savedSettings, apiKey };
     formDirty = false;
     await send("SETTINGS_CHANGED");
-    status.textContent = currentSettings.selectedFields.length || currentSettings.selectedSubfields.length
-      ? "Saved. Local filters apply now; only a new category scope starts a backfill."
-      : "Saved. With no field selected, the feed uses a cross-disciplinary preview.";
+    status.textContent = "Saved locally. No discovery or API request was started.";
   } catch (error) {
     status.textContent = error.message;
   }

@@ -1,5 +1,4 @@
 import {
-  REFRESH_ALARM,
   WINDOWS,
   loadSettings,
   normalizeSettings,
@@ -26,7 +25,7 @@ import {
 import { OpenAlexClient, cleanWorkForDisplay } from "../shared/openalex.js";
 import { applySelectivity } from "../shared/ranking.js";
 import { groupDuplicatePapers } from "../shared/papers.js";
-import { annotateProminence } from "../shared/prominence.js";
+import { annotateProminence, buildProminentResearcherRoster } from "../shared/prominence.js";
 import { SCORING_VERSION, scoreBatch } from "../shared/scoring.js";
 
 const FALLBACK_TAXONOMY = Object.freeze([
@@ -107,6 +106,24 @@ function deduplicateAuthors(authors) {
   return [...new Map(authors.map((author) => [author.id, author])).values()];
 }
 
+async function getProminenceRoster(authors = null) {
+  if (authors) {
+    const roster = buildProminentResearcherRoster(authors);
+    await setMetadata("prominentResearcherRoster", roster);
+    return roster;
+  }
+  const cached = await getMetadata("prominentResearcherRoster");
+  if (Array.isArray(cached) && cached.length) return cached;
+  return getProminenceRoster(await getAll("authors"));
+}
+
+function migratedCoverage(coverage) {
+  if (!coverage?.fullCompletedAt || Number(coverage.horizonDays) > 0) return coverage;
+  // v0.4 always built a one-year index but did not persist the horizon. Preserve
+  // that expensive work instead of interpreting the missing field as zero days.
+  return { ...coverage, horizonDays: 365, migratedLegacyHorizon: true };
+}
+
 function chooseAuthorIds(works, limit) {
   const priority = [];
   const remainder = [];
@@ -123,7 +140,9 @@ function chooseAuthorIds(works, limit) {
       }
     }
   }
-  return [...new Set([...priority, ...remainder])].slice(0, limit);
+  return [...new Set([...priority, ...remainder])]
+    .filter((id) => /^A\d+$/.test(String(id || "")))
+    .slice(0, limit);
 }
 
 async function ensureDefaults() {
@@ -134,15 +153,6 @@ async function ensureDefaults() {
   const normalized = normalizeSettings(stored.settings || {});
   if (JSON.stringify(stored.settings || null) !== JSON.stringify(normalized)) {
     await chrome.storage.sync.set({ settings: normalized });
-  }
-}
-
-async function ensureAlarm() {
-  const settings = await loadSettings();
-  const alarm = await chrome.alarms.get(REFRESH_ALARM);
-  const periodInMinutes = settings.refreshHours * 60;
-  if (!alarm || Math.abs((alarm.periodInMinutes || 0) - periodInMinutes) > 0.01) {
-    await chrome.alarms.create(REFRESH_ALARM, { delayInMinutes: 1, periodInMinutes });
   }
 }
 
@@ -238,10 +248,14 @@ async function fetchDiscovery(client, settings, taxonomy, since, until, mode, wr
   const laneLimit = mode === "limited" ? settings.broadSample : settings.maxDiscoveryWorks;
   const lanes = [];
   if (selection.fieldIds.length) {
-    lanes.push({ label: "selected fields", fieldIds: selection.fieldIds, subfieldIds: [] });
+    for (const query of settings.queries.length ? settings.queries : [""]) {
+      lanes.push({ label: query || "selected fields", fieldIds: selection.fieldIds, subfieldIds: [], query });
+    }
   }
   if (selection.subfieldIds.length) {
-    lanes.push({ label: "selected subfields", fieldIds: [], subfieldIds: selection.subfieldIds });
+    for (const query of settings.queries.length ? settings.queries : [""]) {
+      lanes.push({ label: query || "selected subfields", fieldIds: [], subfieldIds: selection.subfieldIds, query });
+    }
   }
   if (!hasTaxonomySelection && settings.queries.length) {
     for (const query of settings.queries) {
@@ -254,7 +268,7 @@ async function fetchDiscovery(client, settings, taxonomy, since, until, mode, wr
       since,
       until,
       limit: settings.broadSample,
-      seed: Math.floor(Date.now() / (settings.refreshHours * 3_600_000)),
+      seed: Number(isoDate().replaceAll("-", "")),
       englishOnly: settings.englishOnly,
       requireAbstract: false,
     });
@@ -385,7 +399,8 @@ function safePaperUrl(work) {
 }
 
 async function qualifiedMonth(settings, allWorks = null) {
-  const relevant = groupDuplicatePapers(allWorks || (await getAll("works"))).map(annotateProminence).filter(
+  const roster = await getProminenceRoster();
+  const relevant = groupDuplicatePapers(allWorks || (await getAll("works"))).map((work) => annotateProminence(work, roster)).filter(
     (work) =>
       !work.isBaseline &&
       work.scoringVersion &&
@@ -466,13 +481,13 @@ async function performRefresh(reason = "manual") {
   const signature = discoveryScopeSignature(settings);
   const coverageByScope = (await getMetadata("coverageByScope")) || {};
   const legacyCoverage = await getMetadata("discoveryCoverage");
-  const previousCoverage = coverageByScope[signature] || (legacyCoverage?.signature === signature ? legacyCoverage : null);
+  const previousCoverage = migratedCoverage(coverageByScope[signature] || (legacyCoverage?.signature === signature ? legacyCoverage : null));
   const selection = selectionFromSettings(settings);
   const hasFocusedScope = selection.fieldIds.length || selection.subfieldIds.length;
   const fullScan =
     Boolean(settings.apiKey) &&
     hasFocusedScope &&
-    (reason === "rebuild" || previousCoverage?.signature !== signature || !previousCoverage?.fullCompletedAt || Number(previousCoverage?.horizonDays || 0) < settings.maxTimeframeDays);
+    (["manual", "rebuild"].includes(reason) || !previousCoverage?.fullCompletedAt);
   const mode = fullScan ? "full" : settings.apiKey && hasFocusedScope ? "incremental" : "limited";
   const startedAt = new Date().toISOString();
   const baseState = { reason, startedAt, mode, signature };
@@ -530,6 +545,7 @@ async function performRefresh(reason = "manual") {
       pages: 0,
     });
     const allAuthors = deduplicateAuthors([...existingAuthors, ...fetchedAuthors]);
+    await getProminenceRoster(allAuthors);
     const existingWorks = await getAll("works");
     const candidateIds = new Set(candidates.map((work) => work.id));
     const references = selectReferences(
@@ -624,7 +640,6 @@ async function performRefresh(reason = "manual") {
 
 function refresh(reason) {
   if (refreshPromise) {
-    if (["settings", "rebuild"].includes(reason)) pendingRefreshReason = reason;
     return refreshPromise;
   }
   refreshPromise = performRefresh(reason).finally(() => {
@@ -646,9 +661,10 @@ async function getFeed({
   limit = 120,
 } = {}) {
   const settings = await loadSettings();
+  const roster = await getProminenceRoster();
   const windowConfig = WINDOWS[window] || WINDOWS.week;
   const cutoff = daysAgo(windowConfig.days);
-  const relevant = groupDuplicatePapers(await getAll("works")).map(annotateProminence).filter(
+  const relevant = groupDuplicatePapers(await getAll("works")).map((work) => annotateProminence(work, roster)).filter(
     (work) =>
       !work.isBaseline &&
       work.scoringVersion &&
@@ -723,7 +739,7 @@ async function getSiteMatches(items = []) {
   const byDoi = new Map();
   const byArxiv = new Map();
   const byTitle = new Map();
-  for (const work of qualified.works.map(annotateProminence)) {
+  for (const work of qualified.works) {
     if (work.doi) byDoi.set(normalizeDoi(work.doi), work);
     if (work.arxivId) byArxiv.set(work.arxivId, work);
     byTitle.set(normalizedTitle(work.title), work);
@@ -803,6 +819,7 @@ async function screenSiteItems(items = []) {
   const fetchedAuthors = await client.fetchAuthors(authorIds);
   if (fetchedAuthors.length) await bulkPut("authors", fetchedAuthors);
   const allAuthors = deduplicateAuthors([...(await getAll("authors")), ...fetchedAuthors]);
+  await getProminenceRoster(allAuthors);
   const references = selectReferences(await getAll("works"), settings.maxReferenceWorks);
   const scored = scoreBatch(candidates, references, allAuthors, { maxPeerComparisons: settings.maxPeerComparisons });
   await bulkPut("works", scored);
@@ -859,21 +876,19 @@ async function handleMessage(message) {
       return (await getMetadata("apiUsageDaily")) || { date: isoDate(), requests: 0, costUsd: 0 };
     case "GET_SEARCH_HISTORY":
       return (await getMetadata("searchHistory")) || [];
+    case "SET_MAX_TIME_FRAME":
     case "SET_MAX_TIMEFRAME": {
       const stored = await chrome.storage.sync.get("settings");
       const next = normalizeSettings({ ...(stored.settings || {}), maxTimeframeDays: message.payload?.days });
       await chrome.storage.sync.set({ settings: next });
-      refresh("timeframe").catch(console.error);
-      return { maxTimeframeDays: next.maxTimeframeDays };
+      return { maxTimeframeDays: next.maxTimeframeDays, discoveryStarted: false };
     }
     case "REFRESH":
       return refresh("manual");
     case "REBUILD":
       return refresh("rebuild");
     case "SETTINGS_CHANGED":
-      await ensureAlarm();
-      refresh("settings").catch(console.error);
-      return { ok: true };
+      return { ok: true, discoveryStarted: false };
     case "CLEAR_DATA":
       await clearDatabase();
       return { ok: true };
@@ -900,21 +915,12 @@ async function handleMessage(message) {
 chrome.runtime.onInstalled.addListener((details) => {
   Promise.all([
     ensureDefaults(),
-    ensureAlarm(),
     chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }),
-  ])
-    .then(() => refresh(details.reason === "install" ? "install" : "update"))
-    .catch(console.error);
+  ]).catch(console.error);
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  ensureAlarm()
-    .then(() => refresh("startup"))
-    .catch(console.error);
-});
-
-chrome.alarms.onAlarm.addListener((alarm) => {
-  if (alarm.name === REFRESH_ALARM) refresh("scheduled").catch(console.error);
+  ensureDefaults().catch(console.error);
 });
 
 if (chrome.notifications?.onClicked) {
@@ -945,4 +951,4 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
   return true;
 });
 
-ensureDefaults().then(ensureAlarm).catch(console.error);
+ensureDefaults().catch(console.error);

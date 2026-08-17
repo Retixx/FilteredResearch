@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FilteredResearch settings</title><link rel="stylesheet" href="options.css"></head>
-<body><header class="top"><div class="wordmark"><span>FR</span><b>FilteredResearch</b></div><small>SETTINGS · v0.5</small></header>
+<body><header class="top"><div class="wordmark"><span>FR</span><b>FilteredResearch</b></div><small>SETTINGS · v0.5.1</small></header>
 <main><div class="title"><h1>Research settings</h1><p>Filters are local. New interests reuse papers already in your index.</p></div>
 <form id="settings-form">
   <section><div class="section-head"><h2>Scope</h2><p>A paper must match the selected category and one interest phrase.</p></div>
@@ -15,14 +15,14 @@
   </section>
   <section><div class="section-head"><h2>Feed & updates</h2></div><div class="grid">
     <label>Default range<select id="default-window"><option value="day">Past day</option><option value="3d">Past 3 days</option><option value="week">Past week</option><option value="2w">Past 2 weeks</option><option value="month">Past month</option><option value="3m">Past 3 months</option><option value="6m">Past 6 months</option><option value="year">Past year</option></select></label>
-    <label>Default ranking<select id="default-sort"><option value="balanced">Best signal</option><option value="novelty">Novelty</option><option value="researcher">Authorship</option><option value="newest">Newest</option></select></label>
-    <label>Refresh<select id="refresh-hours"><option value="3">Every 3 hours</option><option value="6">Every 6 hours</option><option value="12">Every 12 hours</option><option value="24">Daily</option></select></label></div>
+    <label>Default ranking<select id="default-sort"><option value="balanced">Best signal</option><option value="novelty">Novelty</option><option value="researcher">Authorship</option><option value="newest">Newest</option></select></label></div>
+    <p class="hint">Discovery is manual. Saving settings never calls OpenAlex; use refresh in the sidebar when you want a new one-time pass.</p>
     <label class="check"><input id="show-arxiv-badges" type="checkbox"> Highlight matching papers on research sites</label><label class="check"><input id="notifications-enabled" type="checkbox"> Notify me when a new paper clears both bars</label>
   </section>
   <section><div class="section-head"><h2>OpenAlex & local index</h2><p>Your personal key stays in this Chrome profile.</p></div>
     <label for="api-key">OpenAlex API key</label><div class="key-row"><input id="api-key" type="password" autocomplete="off" placeholder="Personal API key"><a href="https://openalex.org/settings/api" target="_blank" rel="noreferrer">Get a free key ↗</a></div>
     <div class="usage"><div><b id="usage-cost">$0.000</b><span> of $1 free daily allowance used here</span></div><div class="usage-track"><i id="usage-bar"></i></div><small id="usage-detail">No calls recorded today.</small></div>
-    <button id="rebuild-index" class="secondary" type="button">Rebuild selected index depth</button>
+    <button id="rebuild-index" class="secondary" type="button">Run one-time discovery</button>
   </section>
   <section><div class="section-head"><h2>Recent configurations</h2><p>Restore prior filters without rescanning an unchanged scope.</p></div><div id="search-history" class="history"><p class="hint">No saved configurations yet.</p></div></section>
   <footer class="actions"><span id="save-status" role="status"></span><button type="submit">Save settings</button></footer>

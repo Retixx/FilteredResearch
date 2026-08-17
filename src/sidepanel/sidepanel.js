@@ -191,7 +191,7 @@ function updateNotificationBadge(count) {
 
 function updateControls() {
   const maxWindow = state.maxTimeframeDays === 365 ? "year" : state.maxTimeframeDays === 180 ? "6m" : state.maxTimeframeDays === 90 ? "3m" : "month";
-  elements.maxWindowTab.hidden = state.maxTimeframeDays <= 30;
+  elements.maxWindowTab.hidden = false;
   elements.maxWindowTab.parentElement.classList.toggle("has-max", state.maxTimeframeDays > 30);
   elements.maxWindowTab.dataset.window = maxWindow;
   elements.maxWindowTab.textContent = { "3m": "3M", "6m": "6M", year: "1Y", month: "1M" }[maxWindow];
@@ -217,7 +217,7 @@ async function loadFeed({ skeleton = true } = {}) {
   state.loading = true;
   elements.feed.setAttribute("aria-busy", "true");
   if (skeleton) renderSkeleton();
-  elements.empty.hidden = true;
+  if (skeleton) elements.empty.hidden = true;
   updateControls();
   try {
     const result = await send("GET_FEED", {
@@ -234,7 +234,9 @@ async function loadFeed({ skeleton = true } = {}) {
     renderNextBatch();
     elements.resultCount.textContent = String(result.resultCount);
     updateNotificationBadge(result.stats.unreadNotifications);
-    elements.empty.hidden = result.resultCount > 0;
+    const refreshState = result.stats.refreshState;
+    const discoveryRunning = refreshState?.status === "running";
+    elements.empty.hidden = result.resultCount > 0 || discoveryRunning;
     elements.feed.hidden = result.resultCount === 0;
     const lastRefresh = result.stats.lastRefresh;
     elements.status.textContent = lastRefresh
@@ -243,14 +245,12 @@ async function loadFeed({ skeleton = true } = {}) {
           "hour",
         )}`
       : "Ready for the first screen";
-    const refreshState = result.stats.refreshState;
     const coverage = result.coverage;
     if (refreshState?.status === "running") {
       const progress = refreshState.total
         ? ` ${compactNumber(refreshState.fetched)} of ${compactNumber(refreshState.total)} fetched.`
         : "";
       showNotice(`Building ${refreshState.mode} index · ${refreshState.phase || "starting"}.${progress}`);
-      setTimeout(() => loadFeed({ skeleton: false }), 2500);
     } else if (refreshState?.status === "error") {
       showNotice(result.stats.refreshState.message, "error");
     } else if (coverage?.needsApiKey) {
@@ -310,7 +310,7 @@ async function refresh() {
   if (state.loading) return;
   elements.refresh.classList.add("spinning");
   elements.refresh.disabled = true;
-  showNotice("Checking the newest papers… complete rebuilds are started from settings.");
+  showNotice(`Running one-time ${elements.maxTimeframe.selectedOptions[0]?.textContent || "index"} discovery… the saved feed will update only when it finishes.`);
   try {
     const result = await send("REFRESH");
     showNotice(
@@ -342,11 +342,10 @@ elements.maxTimeframe.addEventListener("change", async () => {
   try {
     const result = await send("SET_MAX_TIMEFRAME", { days });
     state.maxTimeframeDays = result.maxTimeframeDays;
-    const currentDays = WINDOWS[state.window]?.days || 7;
-    if (currentDays > state.maxTimeframeDays) state.window = state.maxTimeframeDays >= 30 ? "month" : "week";
+    state.window = state.maxTimeframeDays === 365 ? "year" : state.maxTimeframeDays === 180 ? "6m" : state.maxTimeframeDays === 90 ? "3m" : "month";
     updateControls();
-    showNotice(days > 90 ? "Expanding the local index. This first scan may take longer." : "Index depth updated.");
-    setTimeout(() => loadFeed({ skeleton: false }), 500);
+    showNotice("Index depth saved locally. Press refresh when you want to run discovery; no API request was made.", "success");
+    await loadFeed({ skeleton: false });
   } catch (error) { showNotice(error.message, "error"); }
   finally { elements.maxTimeframe.disabled = false; }
 });

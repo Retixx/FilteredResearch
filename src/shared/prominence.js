@@ -15,14 +15,50 @@ const PEOPLE = [
   "Ilya Sutskever", "Dario Amodei", "Percy Liang", "Christopher Manning", "Kaiming He", "Timnit Gebru", "Joelle Pineau", "Pieter Abbeel", "Chelsea Finn", "Sergey Levine",
   "Ian Goodfellow", "Oriol Vinyals", "Noam Brown", "Richard Sutton", "Ruslan Salakhutdinov",
 ];
-export const PROMINENCE_CATALOG_SIZE = ORGS.length + PEOPLE.length;
+export const PROMINENCE_SEED_SIZE = ORGS.length + PEOPLE.length;
+export const PROMINENCE_RESEARCHER_TARGET = 500;
+export const PROMINENCE_CATALOG_SIZE = ORGS.length + PROMINENCE_RESEARCHER_TARGET;
 function includesAlias(text, aliases) { const padded = ` ${text} `; return aliases.split("|").some((alias) => padded.includes(` ${normalizeSearchText(alias)} `)); }
-export function prominenceMarkers(work) {
+
+export function buildProminentResearcherRoster(authors = []) {
+  const seededNames = new Set(PEOPLE.map(normalizeSearchText));
+  const dynamicLimit = Math.max(0, PROMINENCE_RESEARCHER_TARGET - PEOPLE.length);
+  return [...authors]
+    .filter((author) => author?.id && author?.name && !seededNames.has(normalizeSearchText(author.name)))
+    .filter((author) => Number(author.hIndex || 0) >= 20 || Number(author.citedByCount || 0) >= 2_000)
+    .sort((left, right) =>
+      Number(right.hIndex || 0) - Number(left.hIndex || 0) ||
+      Number(right.citedByCount || 0) - Number(left.citedByCount || 0) ||
+      String(left.name).localeCompare(String(right.name)),
+    )
+    .slice(0, dynamicLimit)
+    .map((author) => ({
+      authorId: author.id,
+      label: author.name,
+      color: "#477c73",
+      hIndex: Number(author.hIndex || 0),
+      citedByCount: Number(author.citedByCount || 0),
+    }));
+}
+
+export function prominenceMarkers(work, researcherRoster = []) {
   const markers = [];
   const affiliations = normalizeSearchText((work.authorships || []).flatMap((a) => [...(a.institutions || []), ...(a.rawAffiliations || [])]).join(" "));
   for (const [label, aliases, color] of ORGS) if (includesAlias(affiliations, aliases)) markers.push({ type: "organization", label, color });
   const authorNames = new Set((work.authorships || []).map((a) => normalizeSearchText(a.name)));
   for (const name of PEOPLE) if (authorNames.has(normalizeSearchText(name))) markers.push({ type: "researcher", label: name, color: "#477c73" });
-  return markers.slice(0, 2);
+  const authorIds = new Set((work.authorships || []).map((authorship) => authorship.authorId).filter(Boolean));
+  for (const researcher of researcherRoster) {
+    if (authorIds.has(researcher.authorId) || authorNames.has(normalizeSearchText(researcher.label))) {
+      markers.push({ type: "researcher", label: researcher.label, color: researcher.color || "#477c73" });
+    }
+  }
+  const seen = new Set();
+  return markers.filter((marker) => {
+    const key = `${marker.type}:${normalizeSearchText(marker.label)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  }).slice(0, 2);
 }
-export function annotateProminence(work) { const prominence = prominenceMarkers(work); return { ...work, prominence, authorshipOverride: prominence.length > 0 }; }
+export function annotateProminence(work, researcherRoster = []) { const prominence = prominenceMarkers(work, researcherRoster); return { ...work, prominence, authorshipOverride: prominence.length > 0 }; }

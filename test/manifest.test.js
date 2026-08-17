@@ -6,7 +6,6 @@ const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.me
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 
 test("release versions stay aligned", () => {
-  assert.equal(manifest.version, "0.5.0");
   assert.equal(manifest.version, packageJson.version);
 });
 
@@ -15,7 +14,7 @@ test("manifest is MV3 and has only scoped host access", () => {
   assert.equal(manifest.minimum_chrome_version, "116");
   assert.deepEqual(manifest.host_permissions, ["https://api.openalex.org/*", "https://arxiv.org/*", "https://export.arxiv.org/*"]);
   assert.ok(manifest.permissions.includes("sidePanel"));
-  assert.ok(manifest.permissions.includes("alarms"));
+  assert.ok(!manifest.permissions.includes("alarms"));
   assert.ok(!manifest.permissions.includes("notifications"));
   assert.deepEqual(manifest.optional_permissions, ["notifications"]);
   assert.ok(!manifest.permissions.includes("tabs"));

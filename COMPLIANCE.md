@@ -9,7 +9,7 @@ This document is an engineering risk review, not legal advice or a legal certifi
 | Single purpose | Research discovery, ranking, alerts, and on-page marking are one coherent purpose. | Implemented |
 | Minimum permissions | No `tabs`, `history`, `cookies`, scripting, identity, or all-sites permission. Site access is a fixed research-domain list. | Tested |
 | Notifications | Optional permission requested only when the user enables the feature. | Implemented |
-| Website content | Visible titles/IDs are inspected locally for the visible highlighting feature and never transmitted or retained as browsing history. | Disclosed |
+| Website content | Visible titles/IDs are checked locally first; unresolved scholarly identifiers may be resolved through OpenAlex/arXiv and are never sent to the developer or retained as browsing history. | Disclosed |
 | API credentials | No developer key is bundled. Every user supplies a dedicated OpenAlex key, stored locally and hidden from content scripts. | Implemented |
 | Network destinations | Background requests are restricted to HTTPS OpenAlex API access and arXiv's public taxonomy page. Content scripts perform no external fetches. | Tested |
 | Remote code | No remote scripts, `eval`, WebAssembly, or downloaded executable logic. | Tested |

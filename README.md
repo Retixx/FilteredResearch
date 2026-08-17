@@ -1,20 +1,20 @@
 # FilteredResearch
 
-FilteredResearch v0.5 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
+FilteredResearch v0.5.1 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
 
 - **Novelty**: lexical distance from up to 320 older, field-adjacent OpenAlex papers, adjusted for evidence completeness, rare title phrases, cross-field combinations, and incremental wording.
 - **Authorship**: an established-track-record signal using author h-index, citations, recent citedness, works count, ORCID presence, and authorship role.
 
 Neither score proves scientific novelty, quality, correctness, reputation, or significance. They are screening heuristics for deciding what to inspect next.
 
-## What changed in v0.5
+## What changed in v0.5.1
 
-- A compact sidebar control bounds discovery to 1 month, 3 months, 6 months, or 1 year. One month is the default; only expanding the bound starts a deeper backfill.
+- A compact sidebar control labels 1 month as Regular, 3 months as Moderate, 6 months as Deep, and 1 year as Extreme. Changing it never starts discovery.
 - Category labels and codes are loaded from arXiv's official eight-group, 155-category taxonomy and cached locally for 30 days.
-- Cursor-based discovery can retrieve up to 200,000 works inside that selected scope; scheduled checks request only a recent overlap.
+- Discovery runs only when the user presses refresh (or the explicit one-time discovery button), can retrieve up to 1,000,000 works, and leaves the saved feed unchanged until the pass completes.
 - AI-labeled records require AI evidence in the title or abstract, and user interests match title/abstract phrases within a bounded window.
 - DOI, arXiv, and normalized title/author duplicates are grouped into one paper with multiple source links.
-- Both sliders apply with AND and as visible score floors. A curated 50-entry prominent-source marker may bypass authorship only, never novelty or relevance.
+- Both sliders apply with AND and as visible score floors. The 50 curated prominence seeds expand locally to a 500-researcher roster from enriched OpenAlex author records; a marker may bypass authorship only, never novelty or relevance.
 - Prior configurations and results remain local and reusable; changing only interests or thresholds does not trigger a full scope rebuild.
 - Settings show this extension's recorded daily OpenAlex request cost against the $1 free allowance.
 - OpenAlex field and subfield filters use the current hierarchy; selecting a parent includes every subfield.
@@ -22,7 +22,7 @@ Neither score proves scientific novelty, quality, correctness, reputation, or si
 - Selectivity is logarithmic and percentile-based. `1` retains nearly every field-matched paper; `80` targets the top 5% on each signal; `100` targets the top 0.02%.
 - A paper must clear both the novelty and authorship bars.
 - Titles are normalized for escaped HTML and common joined-word failures such as `EfficientTwo` and `FromFilamentary`.
-- Scheduled checks query only the newest two-day overlap; a full bounded rebuild happens for a new scope, a larger index depth, or an explicit rebuild.
+- Saving settings, changing depth, startup, and install make no discovery calls. Refresh is the only normal discovery trigger.
 - Matching indexed papers are highlighted locally on arXiv, PubMed, Semantic Scholar, OpenAlex, Google Scholar, and DOI resolver pages.
 - Visible papers missing from the local index are batch-resolved by the background worker under the incremental API budget, then scored with the same thresholds and prominence overrides as the sidebar.
 - Notifications are optional, and every user supplies their own OpenAlex key.
@@ -33,8 +33,8 @@ Neither score proves scientific novelty, quality, correctness, reputation, or si
 2. Run `npm test`, `npm run check`, and `npm run package`.
 3. Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select `dist/filteredresearch-extension`.
 4. Open the extension settings, select **Computer Science → Artificial Intelligence** (or another scope), add a dedicated free OpenAlex API key, and save.
-5. Choose an **Index depth** in the sidebar. Keep Chrome open while the initial index is built.
-6. Click the toolbar icon to open the side panel.
+5. Choose an **Index depth** in the sidebar, then press refresh and keep Chrome open until the one-time pass finishes.
+6. Click the toolbar icon whenever you want to reopen the saved local feed.
 
 An unpacked extension does not update itself from GitHub. Chrome Web Store installations update automatically after each submitted version is approved; see [docs/WEB_STORE_RELEASES.md](docs/WEB_STORE_RELEASES.md).
 
@@ -42,9 +42,7 @@ An unpacked extension does not update itself from GitHub. Chrome Web Store insta
 
 Measured on August 17, 2026, an English AI 30-day query returned 9,554 article/preprint records across 96 cursor pages with no duplicate IDs. Enriching 10,409 priority authors took 105 author pages. The production-shape run took roughly two minutes locally, used about 63 MiB of work-response data, peaked near 350 MiB of process memory, and was estimated around **$0.021** under the then-current OpenAlex per-call prices. Computer Science was approximately 20,920 works and should take roughly 3–5 minutes and about $0.05 on a comparable connection.
 
-These are observations, not guarantees. OpenAlex coverage, pricing, limits, counts, and response times can change. A personal key prevents one publisher key from becoming a scaling bottleneck. The extension enforces `$0.75` for a full run and `$0.02` for a recent-only run; a stopped run reports the budget guard rather than continuing silently.
-
-At the default six-hour schedule, four recent-only checks have a combined worst-case guard of `$0.08/day`; normal cached AI checks should be much lower. Manual refreshes/rebuilds are additional and always use the installing user's allowance.
+These are observations, not guarantees. OpenAlex coverage, pricing, limits, counts, and response times can change. A personal key prevents one publisher key from becoming a scaling bottleneck. A manually started full pass has a `$0.95` estimated-cost guard; there are no scheduled, startup, settings-save, or depth-change discovery calls.
 
 On that measured AI corpus, setting both sliders equally retained 9,554 papers at `1`, 3,201 at `40`, 213 at `60`, 8 at `80`, and 0 at `90` or `100`. The exact intersection changes with the field, month, ties, and correlation between the signals.
 
@@ -70,7 +68,7 @@ Because both bars must be cleared, the final set is usually smaller than either 
 
 ## Privacy and permissions
 
-There is no FilteredResearch backend, analytics, advertising, or telemetry. Public scholarly metadata and scores stay in extension-owned IndexedDB. The personal API key stays in local Chrome extension storage and is hidden from content scripts. Supported research pages are inspected locally only for visible highlighting; those page values are not sent to OpenAlex or the developer.
+There is no FilteredResearch backend, analytics, advertising, or telemetry. Public scholarly metadata and scores stay in extension-owned IndexedDB. The personal API key stays in local Chrome extension storage and is hidden from content scripts. Supported pages are inspected for highlighting; unresolved scholarly titles/IDs may be resolved through OpenAlex or arXiv by the background worker, but nothing is sent to the developer.
 
 Read [PRIVACY.md](PRIVACY.md) and the engineering release gate in [COMPLIANCE.md](COMPLIANCE.md). The extension requests no tabs, history, cookies, identity, clipboard, or all-sites access. Notifications are optional.
 

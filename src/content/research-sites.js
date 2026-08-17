@@ -85,6 +85,7 @@
       badge.textContent += ` · ${work.prominence.map((marker) => marker.label).join(" / ")}`;
       badge.style.setProperty("--fr-accent", work.prominence[0].color);
       badge.classList.add("filteredresearch-site-prominent");
+      container.style.setProperty("--fr-accent", work.prominence[0].color);
     }
     container.prepend(badge);
   }
