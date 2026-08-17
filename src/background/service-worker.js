@@ -61,6 +61,7 @@ let refreshPromise = null;
 let pendingRefreshReason = null;
 let usageAccumulator = null;
 let usageFlushTimer = null;
+let feedCorpusCache = null;
 
 function isoDate(date = new Date()) {
   return date.toISOString().slice(0, 10);
@@ -109,11 +110,11 @@ function deduplicateAuthors(authors) {
 async function getProminenceRoster(authors = null) {
   if (authors) {
     const roster = buildProminentResearcherRoster(authors);
-    await setMetadata("prominentResearcherRoster", roster);
+    await setMetadata("prominentResearcherRoster", { version: 2, researchers: roster });
     return roster;
   }
   const cached = await getMetadata("prominentResearcherRoster");
-  if (Array.isArray(cached) && cached.length) return cached;
+  if (cached?.version === 2 && Array.isArray(cached.researchers)) return cached.researchers;
   return getProminenceRoster(await getAll("authors"));
 }
 
@@ -190,12 +191,24 @@ function parseArxivTaxonomy(html) {
       const mapped = ARXIV_CS_SUBFIELDS[code] || [];
       const mappedFields = mapped.filter((id) => id.length <= 2);
       const mappedSubfields = mapped.filter((id) => id.length > 2);
-      return { id: code, name: `${code} — ${match[2].trim()}`, arxivCode: code,
+      return { id: code, name: match[2].trim(), arxivCode: code,
         openAlexFieldIds: mappedFields.length ? mappedFields : mappedSubfields.length ? [] : ARXIV_GROUP_FIELDS[groupId] || [],
         openAlexSubfieldIds: mappedSubfields };
     });
-    return { id: groupId, name: heading[2].trim(), domainName: "arXiv", openAlexFieldIds: ARXIV_GROUP_FIELDS[groupId] || [], subfields: categories };
+    return { id: groupId, name: heading[2].trim(), kind: "arxiv", domainName: "arXiv", openAlexFieldIds: ARXIV_GROUP_FIELDS[groupId] || [], subfields: categories };
   }).filter((group) => group.subfields.length);
+}
+
+async function getCategoryTaxonomy(options = {}) {
+  const [arxiv, openAlex] = await Promise.all([getArxivTaxonomy(options), getOpenAlexTaxonomy(options)]);
+  const cleanArxiv = arxiv.map((field) => ({ ...field, kind: "arxiv", subfields: (field.subfields || []).map((subfield) => ({ ...subfield, name: String(subfield.name || subfield.id).replace(/^\S+\s+[—-]\s+/, "") })) }));
+  const arxivFieldIds = new Set(Object.values(ARXIV_GROUP_FIELDS).flat());
+  const general = openAlex.filter((field) => !arxivFieldIds.has(String(field.id))).map((field) => ({
+    id: `oa:${field.id}`, name: field.name, kind: "openalex", domainName: field.domainName,
+    openAlexFieldIds: [String(field.id)],
+    subfields: (field.subfields || []).map((subfield) => ({ id: `oa:${subfield.id}`, name: subfield.name, openAlexFieldIds: [], openAlexSubfieldIds: [String(subfield.id)] })),
+  }));
+  return [...cleanArxiv, ...general];
 }
 
 async function getArxivTaxonomy({ force = false } = {}) {
@@ -214,7 +227,7 @@ async function getArxivTaxonomy({ force = false } = {}) {
   } catch (error) {
     console.warn("arXiv taxonomy refresh failed", error);
     if (cached?.fields?.length) return cached.fields;
-    return [{ id: "cs", name: "Computer Science", domainName: "arXiv", openAlexFieldIds: ["17"], subfields: Object.entries(ARXIV_CS_SUBFIELDS).map(([id, mapped]) => ({ id, name: id, arxivCode: id, openAlexFieldIds: [], openAlexSubfieldIds: mapped.filter((value) => value.length > 2) })) }];
+    return [{ id: "cs", name: "Computer Science", kind: "arxiv", domainName: "arXiv", openAlexFieldIds: ["17"], subfields: Object.entries(ARXIV_CS_SUBFIELDS).map(([id, mapped]) => ({ id, name: id, arxivCode: id, openAlexFieldIds: [], openAlexSubfieldIds: mapped.filter((value) => value.length > 2) })) }];
   }
 }
 
@@ -663,14 +676,24 @@ async function getFeed({
   const settings = await loadSettings();
   const roster = await getProminenceRoster();
   const windowConfig = WINDOWS[window] || WINDOWS.week;
-  const cutoff = daysAgo(windowConfig.days);
-  const relevant = groupDuplicatePapers(await getAll("works")).map((work) => annotateProminence(work, roster)).filter(
-    (work) =>
-      !work.isBaseline &&
-      work.scoringVersion &&
-      work.publicationDate >= cutoff &&
-      matchesResearchFilters(work, settings),
-  );
+  const signature = discoveryScopeSignature(settings);
+  const coverageByScope = (await getMetadata("coverageByScope")) || {};
+  const legacyCoverage = await getMetadata("discoveryCoverage");
+  const coverage = migratedCoverage(coverageByScope[signature] || (legacyCoverage?.signature === signature ? legacyCoverage : null));
+  const indexedHorizonDays = Math.max(1, Math.min(Number(coverage?.horizonDays || settings.maxTimeframeDays || 30), Number(settings.maxTimeframeDays || 30)));
+  const effectiveDays = Math.min(windowConfig.days, indexedHorizonDays);
+  const cutoff = daysAgo(effectiveDays);
+  const lastRefresh = await getMetadata("lastRefresh");
+  const cacheKey = `${lastRefresh || "none"}:${researchFilterSignature(settings)}`;
+  if (feedCorpusCache?.key !== cacheKey) {
+    feedCorpusCache = {
+      key: cacheKey,
+      works: groupDuplicatePapers(await getAll("works")).map((work) => annotateProminence(work, roster)).filter(
+        (work) => !work.isBaseline && work.scoringVersion && matchesResearchFilters(work, settings),
+      ),
+    };
+  }
+  const relevant = feedCorpusCache.works.filter((work) => work.publicationDate >= cutoff);
   const selected = applySelectivity(relevant, settings, { includeAll });
   const sorters = {
     balanced: (left, right) => right.discoveryScore - left.discoveryScore,
@@ -699,7 +722,10 @@ async function getFeed({
       cutoffs: selected.cutoffs,
       topFractions: selected.topFractions,
     },
-    coverage: ((await getMetadata("coverageByScope")) || {})[discoveryScopeSignature(settings)] || (await getMetadata("discoveryCoverage")) || null,
+    coverage,
+    indexedHorizonDays,
+    requestedBeyondCoverage: windowConfig.days > indexedHorizonDays,
+    settingsChangedAt: await getMetadata("settingsChangedAt"),
     stats: await databaseStats(),
   };
 }
@@ -871,7 +897,7 @@ async function handleMessage(message) {
     case "GET_STATUS":
       return databaseStats();
     case "GET_TAXONOMY":
-      return getArxivTaxonomy(message.payload || {});
+      return getCategoryTaxonomy(message.payload || {});
     case "GET_API_USAGE":
       return (await getMetadata("apiUsageDaily")) || { date: isoDate(), requests: 0, costUsd: 0 };
     case "GET_SEARCH_HISTORY":
@@ -888,6 +914,8 @@ async function handleMessage(message) {
     case "REBUILD":
       return refresh("rebuild");
     case "SETTINGS_CHANGED":
+      feedCorpusCache = null;
+      await setMetadata("settingsChangedAt", new Date().toISOString());
       return { ok: true, discoveryStarted: false };
     case "CLEAR_DATA":
       await clearDatabase();
@@ -916,6 +944,7 @@ chrome.runtime.onInstalled.addListener((details) => {
   Promise.all([
     ensureDefaults(),
     chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }),
+    getMetadata("refreshState").then((state) => state?.status === "running" ? setMetadata("refreshState", { ...state, status: "ready", interruptedAt: new Date().toISOString() }) : null),
   ]).catch(console.error);
 });
 

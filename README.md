@@ -1,20 +1,20 @@
 # FilteredResearch
 
-FilteredResearch v0.5.1 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
+FilteredResearch v0.5.2 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
 
 - **Novelty**: lexical distance from up to 320 older, field-adjacent OpenAlex papers, adjusted for evidence completeness, rare title phrases, cross-field combinations, and incremental wording.
 - **Authorship**: an established-track-record signal using author h-index, citations, recent citedness, works count, ORCID presence, and authorship role.
 
 Neither score proves scientific novelty, quality, correctness, reputation, or significance. They are screening heuristics for deciding what to inspect next.
 
-## What changed in v0.5.1
+## What changed in v0.5.2
 
 - A compact sidebar control labels 1 month as Regular, 3 months as Moderate, 6 months as Deep, and 1 year as Extreme. Changing it never starts discovery.
 - Category labels and codes are loaded from arXiv's official eight-group, 155-category taxonomy and cached locally for 30 days.
 - Discovery runs only when the user presses refresh (or the explicit one-time discovery button), can retrieve up to 1,000,000 works, and leaves the saved feed unchanged until the pass completes.
 - AI-labeled records require AI evidence in the title or abstract, and user interests match title/abstract phrases within a bounded window.
 - DOI, arXiv, and normalized title/author duplicates are grouped into one paper with multiple source links.
-- Both sliders apply with AND and as visible score floors. The 50 curated prominence seeds expand locally to a 500-researcher roster from enriched OpenAlex author records; a marker may bypass authorship only, never novelty or relevance.
+- Both sliders apply with AND and as visible score floors. Dynamic prominence is field-neutral and requires an exact OpenAlex author ID, h-index of at least 50, and at least 10,000 citations; a marker may bypass authorship only, never novelty or relevance.
 - Prior configurations and results remain local and reusable; changing only interests or thresholds does not trigger a full scope rebuild.
 - Settings show this extension's recorded daily OpenAlex request cost against the $1 free allowance.
 - OpenAlex field and subfield filters use the current hierarchy; selecting a parent includes every subfield.

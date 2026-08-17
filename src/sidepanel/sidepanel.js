@@ -118,8 +118,8 @@ function renderPaper(work, index) {
   const badges = fragment.querySelector(".paper-badges");
   for (const marker of work.prominence || []) {
     const badge = document.createElement("span"); badge.className = "prominence-badge";
-    badge.style.setProperty("--badge-color", marker.color); badge.textContent = marker.label;
-    badge.title = "Curated prominent-source marker; automatically clears the authorship gate."; badges.append(badge);
+    badge.style.setProperty("--badge-color", marker.color); badge.textContent = `Prominent · ${marker.label}`;
+    badge.title = "Verified prominent organization or exact OpenAlex author identity; clears the authorship gate only."; badges.append(badge);
   }
   fragment.querySelector(".paper-why").textContent = whyLine(work);
   const sources = fragment.querySelector(".paper-sources");
@@ -190,11 +190,6 @@ function updateNotificationBadge(count) {
 }
 
 function updateControls() {
-  const maxWindow = state.maxTimeframeDays === 365 ? "year" : state.maxTimeframeDays === 180 ? "6m" : state.maxTimeframeDays === 90 ? "3m" : "month";
-  elements.maxWindowTab.hidden = false;
-  elements.maxWindowTab.parentElement.classList.toggle("has-max", state.maxTimeframeDays > 30);
-  elements.maxWindowTab.dataset.window = maxWindow;
-  elements.maxWindowTab.textContent = { "3m": "3M", "6m": "6M", year: "1Y", month: "1M" }[maxWindow];
   elements.maxTimeframe.value = String(state.maxTimeframeDays);
   elements.depthWarning.hidden = state.maxTimeframeDays <= 90;
   for (const tab of elements.tabs) {
@@ -246,7 +241,11 @@ async function loadFeed({ skeleton = true } = {}) {
         )}`
       : "Ready for the first screen";
     const coverage = result.coverage;
-    if (refreshState?.status === "running") {
+    if (result.requestedBeyondCoverage) {
+      showNotice(`Showing the saved ${result.indexedHorizonDays >= 30 ? `${Math.round(result.indexedHorizonDays / 30)}M` : `${result.indexedHorizonDays}D`} index. Choose a deeper Index depth and press Refresh Research to check older papers.`);
+    } else if (result.settingsChangedAt && (!lastRefresh || Date.parse(result.settingsChangedAt) > Date.parse(lastRefresh))) {
+      showNotice("New settings are filtering saved papers and browser highlights now. Press Refresh Research only when you want new discovery.");
+    } else if (refreshState?.status === "running") {
       const progress = refreshState.total
         ? ` ${compactNumber(refreshState.fetched)} of ${compactNumber(refreshState.total)} fetched.`
         : "";
@@ -329,12 +328,12 @@ async function refresh() {
 for (const tab of elements.tabs) {
   tab.addEventListener("click", () => {
     state.window = tab.dataset.window;
-    loadFeed();
+    loadFeed({ skeleton: false });
   });
 }
 elements.sort.addEventListener("change", () => {
   state.sort = elements.sort.value;
-  loadFeed();
+  loadFeed({ skeleton: false });
 });
 elements.maxTimeframe.addEventListener("change", async () => {
   const days = Number(elements.maxTimeframe.value);
@@ -342,10 +341,8 @@ elements.maxTimeframe.addEventListener("change", async () => {
   try {
     const result = await send("SET_MAX_TIMEFRAME", { days });
     state.maxTimeframeDays = result.maxTimeframeDays;
-    state.window = state.maxTimeframeDays === 365 ? "year" : state.maxTimeframeDays === 180 ? "6m" : state.maxTimeframeDays === 90 ? "3m" : "month";
     updateControls();
     showNotice("Index depth saved locally. Press refresh when you want to run discovery; no API request was made.", "success");
-    await loadFeed({ skeleton: false });
   } catch (error) { showNotice(error.message, "error"); }
   finally { elements.maxTimeframe.disabled = false; }
 });

@@ -169,12 +169,14 @@ a:focus-visible {
 }
 
 .window-tabs {
-  display: grid;
-  grid-template-columns: repeat(6, minmax(38px, 1fr));
+  display: flex;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
 }
-.window-tabs:not(.has-max){grid-template-columns:repeat(5,minmax(38px,1fr))}
 
 .window-tabs button {
+  flex: 0 0 42px;
   min-height: 42px;
   border: 0;
   border-right: 1px solid var(--line);
@@ -444,7 +446,7 @@ a:focus-visible {
 }
 
 .paper-badges { display: flex; flex-wrap: wrap; gap: 5px; margin: -6px 0 11px; }
-.prominence-badge { padding: 2px 6px; border: 1px solid var(--badge-color); border-radius: 7px 2px 7px 2px; color: var(--badge-color); font-size: 8px; letter-spacing: .05em; text-transform: uppercase; }
+.prominence-badge { display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border:1px solid var(--badge-color);border-radius:9px 3px 9px 3px;background:color-mix(in srgb,var(--badge-color) 8%,white);color:var(--badge-color);font-size:9px;font-weight:600;letter-spacing:.06em;text-transform:uppercase}.prominence-badge::before{content:"✦";display:grid;place-items:center;width:16px;height:16px;border-radius:50%;background:var(--badge-color);color:white;font-size:10px}
 .paper-interest { margin: -3px 0 10px; padding-left: 8px; border-left: 2px solid var(--opal); color: var(--muted); font-size: 9px; line-height: 1.45; }
 .source-link { display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:inherit;text-decoration:none; }
 .source-link:hover { text-decoration: underline; }

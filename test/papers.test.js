@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"; import test from "node:test";
 import { groupDuplicatePapers } from "../src/shared/papers.js";
-import { annotateProminence, buildProminentResearcherRoster, PROMINENCE_CATALOG_SIZE, PROMINENCE_RESEARCHER_TARGET, PROMINENCE_SEED_SIZE } from "../src/shared/prominence.js";
+import { annotateProminence, buildProminentResearcherRoster, PROMINENCE_CATALOG_SIZE, PROMINENCE_SEED_SIZE } from "../src/shared/prominence.js";
 test("duplicate publications become one paper with multiple sources", () => {
   const grouped = groupDuplicatePapers([
     { id:"W1", doi:"https://doi.org/10.1/a", title:"Same Paper", publicationDate:"2026-08-12", authorships:[{name:"A. Author"}], sourceName:"Open MIND", url:"https://a", noveltyScore:90 },
@@ -8,10 +8,9 @@ test("duplicate publications become one paper with multiple sources", () => {
   ]);
   assert.equal(grouped.length, 1); assert.equal(grouped[0].sources.length, 2); assert.equal(grouped[0].duplicateCount, 2);
 });
-test("the prominence catalog keeps 50 curated seeds and supports 500 researchers", () => {
+test("the prominence catalog keeps 50 curated seeds and uses strict evidence for dynamic researchers", () => {
   assert.equal(PROMINENCE_SEED_SIZE, 50);
-  assert.equal(PROMINENCE_RESEARCHER_TARGET, 500);
-  assert.equal(PROMINENCE_CATALOG_SIZE, 525);
+  assert.equal(PROMINENCE_CATALOG_SIZE, 50);
 });
 test("the dynamic prominence roster ranks enriched researchers and creates an override", () => {
   const roster = buildProminentResearcherRoster([
@@ -20,6 +19,7 @@ test("the dynamic prominence roster ranks enriched researchers and creates an ov
   ]);
   assert.equal(roster[0].authorId, "A1");
   assert.equal(annotateProminence({ authorships: [{ authorId: "A1", name: "Researcher One" }] }, roster).authorshipOverride, true);
+  assert.equal(annotateProminence({ authorships: [{ authorId: "OTHER", name: "Researcher One" }] }, roster).authorshipOverride, false);
 });
 test("Anthropic affiliation creates a discreet authorship override", () => {
   const work = annotateProminence({ authorships:[{ name:"Example", institutions:["Anthropic"] }] });

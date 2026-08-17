@@ -1,4 +1,4 @@
-# FilteredResearch v0.5.1 specification
+# FilteredResearch v0.5.2 specification
 
 ## Product contract
 
@@ -23,7 +23,7 @@ The primary user chooses an OpenAlex field/subfield and a maximum discovery time
 ### Filters
 
 - Fetch and cache the OpenAlex field/subfield taxonomy for 30 days, with a Computer Science fallback.
-- Present the exact official arXiv group/category codes and names, refreshed from arXiv and cached for 30 days; map them explicitly to OpenAlex discovery scopes without relabeling them as OpenAlex categories.
+- Use arXiv's official technical taxonomy internally while displaying clean category names; supplement it with OpenAlex general fields not covered by arXiv.
 - A parent field checkbox means every child subfield. Individual subfields may be selected instead.
 - Normalize taxonomy identifiers from both bare numeric IDs and current OpenAlex URL-shaped IDs.
 - Category and interest-query groups combine with AND; queries inside the interest group combine with OR.

@@ -51,12 +51,12 @@ function selectedTaxonomy() {
   for (const field of categoryOptions.querySelectorAll(".taxonomy-field")) {
     const parent = field.querySelector("input[data-field]");
     if (parent.checked) {
-      arxivGroups.push(parent.value);
       fieldIds.push(...JSON.parse(parent.dataset.openalexFields || "[]"));
+      if (parent.dataset.kind === "arxiv") arxivGroups.push(parent.value);
       continue;
     }
     for (const input of field.querySelectorAll("input[data-subfield]:checked")) {
-      arxivCategories.push(input.value);
+      if (input.dataset.kind === "arxiv") arxivCategories.push(input.value);
       fieldIds.push(...JSON.parse(input.dataset.openalexFields || "[]"));
       subfieldIds.push(...JSON.parse(input.dataset.openalexSubfields || "[]"));
     }
@@ -69,6 +69,8 @@ function updateCategorySummary() {
   const pieces = [];
   if (arxivGroups.length) pieces.push(`${arxivGroups.length} arXiv group${arxivGroups.length === 1 ? "" : "s"}`);
   if (arxivCategories.length) pieces.push(`${arxivCategories.length} arXiv categor${arxivCategories.length === 1 ? "y" : "ies"}`);
+  const generalFields = categoryOptions.querySelectorAll('input[data-kind="openalex"]:checked').length;
+  if (generalFields) pieces.push(`${generalFields} general categor${generalFields === 1 ? "y" : "ies"}`);
   categorySummary.textContent = pieces.join(" · ") || "All research · preview mode";
 }
 
@@ -95,7 +97,8 @@ function renderTaxonomy(settings) {
     parent.type = "checkbox";
     parent.value = field.id;
     parent.dataset.field = field.id;
-    parent.checked = selectedGroups.has(field.id);
+    parent.dataset.kind = field.kind || "arxiv";
+    parent.checked = parent.dataset.kind === "arxiv" ? selectedGroups.has(field.id) : (field.openAlexFieldIds || []).some((id) => (settings.selectedFields || []).includes(String(id)));
     parent.dataset.openalexFields = JSON.stringify(field.openAlexFieldIds || []);
     parent.addEventListener("click", (event) => event.stopPropagation());
     parent.addEventListener("change", () => {
@@ -109,7 +112,9 @@ function renderTaxonomy(settings) {
     const name = document.createElement("span");
     name.textContent = field.name;
     const count = document.createElement("small");
-    count.textContent = `${field.subfields?.length || 0} subfields`;
+    const updateDisclosure = () => { count.textContent = `${details.open ? "Close ▴" : "Open subfields ▾"} · ${field.subfields?.length || 0}`; };
+    updateDisclosure();
+    details.addEventListener("toggle", updateDisclosure);
     parentLabel.append(parent, name);
     summary.append(parentLabel, count);
     const children = document.createElement("div");
@@ -121,7 +126,8 @@ function renderTaxonomy(settings) {
       input.type = "checkbox";
       input.value = subfield.id;
       input.dataset.subfield = subfield.id;
-      input.checked = parent.checked || selectedCategories.has(subfield.id);
+      input.dataset.kind = field.kind || "arxiv";
+      input.checked = parent.checked || (input.dataset.kind === "arxiv" ? selectedCategories.has(subfield.id) : (subfield.openAlexSubfieldIds || []).some((id) => (settings.selectedSubfields || []).includes(String(id))));
       input.dataset.openalexFields = JSON.stringify(subfield.openAlexFieldIds || []);
       input.dataset.openalexSubfields = JSON.stringify(subfield.openAlexSubfieldIds || []);
       input.disabled = parent.checked;
