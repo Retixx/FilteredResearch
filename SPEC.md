@@ -1,10 +1,10 @@
-# FilteredResearch v0.5.2 specification
+# FilteredResearch v0.5.4 specification
 
 ## Product contract
 
 FilteredResearch is an open-source, local-first Chrome extension for finding recent papers that are both lexically unusual within their field and associated with an established authorship track record. It is not a publisher crawler, paper archive, citation recommender, peer-review substitute, or AI research product.
 
-The primary user chooses an OpenAlex field/subfield and a maximum discovery timeframe of 1, 3, 6, or 12 months in the sidebar. Preferences are local-only; discovery starts exclusively through an explicit user refresh.
+The primary user chooses an OpenAlex field/subfield and an index depth in the sidebar. Depth options are 1 day and 3 days (Light), 1 week and 2 weeks (Moderate), and 1 month and 3 months (Intensive). Three months is the ceiling: deeper passes retrieved far more works than the scoring stage could keep up with, which made discovery unusably slow. Preferences are local-only; discovery starts exclusively through an explicit user refresh.
 
 ## Functional requirements
 
@@ -17,6 +17,7 @@ The primary user chooses an OpenAlex field/subfield and a maximum discovery time
 - Without a key, label the result as a limited preview and retrieve no more than 500 works.
 - If no taxonomy field is selected, use a rotating cross-disciplinary preview rather than claiming exhaustive global coverage.
 - Install, startup, settings saves, and depth changes make no discovery requests. Group records by normalized title plus author identity even across different DOIs and preserve up to one year locally.
+- A stored index depth beyond the supported ceiling migrates onto the nearest supported depth instead of being rejected.
 - Full discovery runs only after explicit user action and the prior saved feed remains available until completion.
 - Enforce a $0.95 full-pass guard by estimated OpenAlex request costs; show locally recorded daily usage in Settings.
 
@@ -39,7 +40,9 @@ The primary user chooses an OpenAlex field/subfield and a maximum discovery time
 
 ### Interface
 
-- Side panel uses past day, 3 days, week, 2 weeks, and month tabs.
+- Side panel uses past day, 3 days, week, 2 weeks, month, and 3 month tabs.
+- One request builds every date view from a single corpus scan, and the side panel serves tab switches from that response. No tab switch issues a message, so switching cannot be delayed by a terminated service worker.
+- The feed render path reads no work or author records to report its counts; only the settings page computes full corpus totals.
 - Feed responses are paginated (maximum 250 serialized works) so a 20,000-paper low-selectivity result does not produce a giant Chrome message.
 - Settings use the existing white/grey/opal minimal-brutalist visual system, fine type, overlapping edge lines, and restrained rounded corners.
 - Settings explain the selectivity anchors, own-key requirement, expected first-run cost/time, local page inspection, and scoring limitations.
@@ -51,6 +54,9 @@ The primary user chooses an OpenAlex field/subfield and a maximum discovery time
 - Notify only for newly indexed works that clear both current bars; keep a local inbox.
 - Supported page access is limited to arXiv, PubMed, Semantic Scholar, OpenAlex, Google Scholar, and DOI resolver URLs.
 - Content scripts inspect visible titles/DOIs/arXiv IDs, send them only to the extension service worker, and compare against the qualifying local index.
+- Highlighting screens the entire local index rather than a recent-only window, because search-result pages are dominated by older work.
+- A visible paper stays eligible for screening until it has been compared against a populated index; a failed or empty pass never permanently retires it.
+- Live screening runs under its own request budget, separate from the smaller incremental-refresh budget that previously stopped it on the first page of results.
 - Content scripts make no external network request and never persist browsing history.
 - arXiv may request one title lookup for a paper page missing locally, but the background worker performs that OpenAlex request under the incremental budget.
 

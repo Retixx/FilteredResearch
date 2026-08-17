@@ -112,7 +112,11 @@ function renderTaxonomy(settings) {
     const name = document.createElement("span");
     name.textContent = field.name;
     const count = document.createElement("small");
-    const updateDisclosure = () => { count.textContent = `${details.open ? "Close ▴" : "Open subfields ▾"} · ${field.subfields?.length || 0}`; };
+    count.className = "disclosure";
+    const total = field.subfields?.length || 0;
+    const updateDisclosure = () => {
+      count.textContent = details.open ? `Hide ${total} ▴` : `${total} subfields ▾`;
+    };
     updateDisclosure();
     details.addEventListener("toggle", updateDisclosure);
     parentLabel.append(parent, name);

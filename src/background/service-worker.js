@@ -1,5 +1,6 @@
 import {
   WINDOWS,
+  WINDOW_ORDER,
   loadSettings,
   normalizeSettings,
 } from "../shared/defaults.js";
@@ -8,9 +9,11 @@ import {
   clearDatabase,
   databaseStats,
   deleteBaselineWorks,
+  feedStats,
   getAll,
   getById,
   getMetadata,
+  getMetadataMany,
   getWorksByArxivIds,
   pruneCandidates,
   setMetadata,
@@ -81,6 +84,15 @@ function yearsAgo(years, fromIso) {
 
 function deduplicate(works) {
   return [...new Map(works.map((work) => [work.id, work])).values()];
+}
+
+// The filtered corpus is shared by the feed and by page highlighting, and its
+// cache key cannot see writes that happen before `lastRefresh` is stamped, so
+// every write to the works store drops it explicitly.
+async function storeWorks(works) {
+  if (!works.length) return;
+  await bulkPut("works", works);
+  feedCorpusCache = null;
 }
 
 async function recordApiUsage(event) {
@@ -411,16 +423,52 @@ function safePaperUrl(work) {
   return `https://openalex.org/${work.id}`;
 }
 
-async function qualifiedMonth(settings, allWorks = null) {
-  const roster = await getProminenceRoster();
-  const relevant = groupDuplicatePapers(allWorks || (await getAll("works"))).map((work) => annotateProminence(work, roster)).filter(
-    (work) =>
-      !work.isBaseline &&
-      work.scoringVersion &&
-      work.publicationDate >= daysAgo(30) &&
-      matchesResearchFilters(work, settings),
-  );
+// Grouping, prominence annotation and filter matching over the whole works
+// store is the single most expensive thing this worker does. Every caller now
+// shares one cached result instead of repeating the scan, and the cache is
+// invalidated by the same key the feed uses.
+async function filteredCorpus(settings, { lastRefresh = null } = {}) {
+  const stamp = lastRefresh ?? (await getMetadata("lastRefresh"));
+  const cacheKey = `${stamp || "none"}:${researchFilterSignature(settings)}`;
+  if (feedCorpusCache?.key !== cacheKey) {
+    const roster = await getProminenceRoster();
+    feedCorpusCache = {
+      key: cacheKey,
+      works: groupDuplicatePapers(await getAll("works"))
+        .map((work) => annotateProminence(work, roster))
+        .filter(
+          (work) => !work.isBaseline && work.scoringVersion && matchesResearchFilters(work, settings),
+        ),
+    };
+  }
+  return feedCorpusCache.works;
+}
+
+// `days: null` means "everything in the local index". Notifications still want
+// the 30-day view, but on-page highlighting must be able to match the older
+// papers that dominate search-result pages.
+async function qualifiedPapers(settings, { days = 30 } = {}) {
+  const corpus = await filteredCorpus(settings);
+  const cutoff = days === null ? null : daysAgo(days);
+  const relevant = cutoff ? corpus.filter((work) => work.publicationDate >= cutoff) : corpus;
   return applySelectivity(relevant, settings);
+}
+
+async function qualifiedMonth(settings, allWorks = null) {
+  if (allWorks) {
+    const roster = await getProminenceRoster();
+    const relevant = groupDuplicatePapers(allWorks)
+      .map((work) => annotateProminence(work, roster))
+      .filter(
+        (work) =>
+          !work.isBaseline &&
+          work.scoringVersion &&
+          work.publicationDate >= daysAgo(30) &&
+          matchesResearchFilters(work, settings),
+      );
+    return applySelectivity(relevant, settings);
+  }
+  return qualifiedPapers(settings, { days: 30 });
 }
 
 async function recordNewPaperNotifications(
@@ -534,7 +582,7 @@ async function performRefresh(reason = "manual") {
     const candidates = discovery.works.map((work) => ({ ...work, isBaseline: false }));
 
     const baseline = await maybeFetchBaseline(client, settings, taxonomy, daysAgo(settings.maxTimeframeDays), writeProgress);
-    if (baseline.length) await bulkPut("works", baseline);
+    if (baseline.length) await storeWorks(baseline);
 
     const existingAuthors = await getAll("authors");
     const freshCutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
@@ -568,7 +616,7 @@ async function performRefresh(reason = "manual") {
     const scored = scoreBatch(candidates, references, allAuthors, {
       maxPeerComparisons: settings.maxPeerComparisons,
     });
-    await bulkPut("works", scored);
+    await storeWorks(scored);
 
     const notificationsGenerated = await recordNewPaperNotifications(
       scored,
@@ -666,42 +714,52 @@ function refresh(reason) {
   return refreshPromise;
 }
 
-async function getFeed({
-  window = "week",
-  sort = "balanced",
-  includeAll = false,
-  offset = 0,
-  limit = 120,
-} = {}) {
-  const settings = await loadSettings();
-  const roster = await getProminenceRoster();
-  const windowConfig = WINDOWS[window] || WINDOWS.week;
+const SORTERS = {
+  balanced: (left, right) => right.discoveryScore - left.discoveryScore,
+  novelty: (left, right) => right.noveltyScore - left.noveltyScore,
+  researcher: (left, right) => right.researcherScore - left.researcherScore,
+  newest: (left, right) => right.publicationDate.localeCompare(left.publicationDate),
+};
+
+// Shared preamble for both the single-window and all-window paths, so a bundle
+// costs exactly one settings load, one batched metadata read and one corpus
+// scan no matter how many windows it covers.
+async function feedContext(settings) {
   const signature = discoveryScopeSignature(settings);
-  const coverageByScope = (await getMetadata("coverageByScope")) || {};
-  const legacyCoverage = await getMetadata("discoveryCoverage");
-  const coverage = migratedCoverage(coverageByScope[signature] || (legacyCoverage?.signature === signature ? legacyCoverage : null));
-  const indexedHorizonDays = Math.max(1, Math.min(Number(coverage?.horizonDays || settings.maxTimeframeDays || 30), Number(settings.maxTimeframeDays || 30)));
-  const effectiveDays = Math.min(windowConfig.days, indexedHorizonDays);
-  const cutoff = daysAgo(effectiveDays);
-  const lastRefresh = await getMetadata("lastRefresh");
-  const cacheKey = `${lastRefresh || "none"}:${researchFilterSignature(settings)}`;
-  if (feedCorpusCache?.key !== cacheKey) {
-    feedCorpusCache = {
-      key: cacheKey,
-      works: groupDuplicatePapers(await getAll("works")).map((work) => annotateProminence(work, roster)).filter(
-        (work) => !work.isBaseline && work.scoringVersion && matchesResearchFilters(work, settings),
-      ),
-    };
-  }
-  const relevant = feedCorpusCache.works.filter((work) => work.publicationDate >= cutoff);
-  const selected = applySelectivity(relevant, settings, { includeAll });
-  const sorters = {
-    balanced: (left, right) => right.discoveryScore - left.discoveryScore,
-    novelty: (left, right) => right.noveltyScore - left.noveltyScore,
-    researcher: (left, right) => right.researcherScore - left.researcherScore,
-    newest: (left, right) => right.publicationDate.localeCompare(left.publicationDate),
+  const meta = await getMetadataMany([
+    "coverageByScope",
+    "discoveryCoverage",
+    "lastRefresh",
+    "settingsChangedAt",
+  ]);
+  const legacyCoverage = meta.discoveryCoverage;
+  const coverage = migratedCoverage(
+    (meta.coverageByScope || {})[signature] ||
+      (legacyCoverage?.signature === signature ? legacyCoverage : null),
+  );
+  const indexedHorizonDays = Math.max(
+    1,
+    Math.min(
+      Number(coverage?.horizonDays || settings.maxTimeframeDays || 30),
+      Number(settings.maxTimeframeDays || 30),
+    ),
+  );
+  return {
+    coverage,
+    indexedHorizonDays,
+    settingsChangedAt: meta.settingsChangedAt,
+    corpus: await filteredCorpus(settings, { lastRefresh: meta.lastRefresh }),
+    stats: await feedStats(),
   };
-  selected.works.sort(sorters[sort] || sorters.balanced);
+}
+
+function windowSlice(context, settings, { window, sort, includeAll, offset, limit }) {
+  const windowConfig = WINDOWS[window] || WINDOWS.week;
+  const effectiveDays = Math.min(windowConfig.days, context.indexedHorizonDays);
+  const cutoff = daysAgo(effectiveDays);
+  const relevant = context.corpus.filter((work) => work.publicationDate >= cutoff);
+  const selected = applySelectivity(relevant, settings, { includeAll });
+  selected.works.sort(SORTERS[sort] || SORTERS.balanced);
   const safeOffset = Math.max(0, Number(offset) || 0);
   const safeLimit = Math.min(250, Math.max(1, Number(limit) || 120));
   const page = selected.works.slice(safeOffset, safeOffset + safeLimit).map((work) => ({
@@ -722,12 +780,39 @@ async function getFeed({
       cutoffs: selected.cutoffs,
       topFractions: selected.topFractions,
     },
-    coverage,
-    indexedHorizonDays,
-    requestedBeyondCoverage: windowConfig.days > indexedHorizonDays,
-    settingsChangedAt: await getMetadata("settingsChangedAt"),
-    stats: await databaseStats(),
+    coverage: context.coverage,
+    indexedHorizonDays: context.indexedHorizonDays,
+    requestedBeyondCoverage: windowConfig.days > context.indexedHorizonDays,
+    settingsChangedAt: context.settingsChangedAt,
+    stats: context.stats,
   };
+}
+
+async function getFeed({
+  window = "week",
+  sort = "balanced",
+  includeAll = false,
+  offset = 0,
+  limit = 120,
+} = {}) {
+  const settings = await loadSettings();
+  const context = await feedContext(settings);
+  return windowSlice(context, settings, { window, sort, includeAll, offset, limit });
+}
+
+// Every date view in one response. The sidebar renders tab switches straight
+// from this, so changing tabs costs no message round trip and cannot be slowed
+// down by a cold service worker.
+async function getFeedBundle({ sort = "balanced", limit = 120 } = {}) {
+  const settings = await loadSettings();
+  const context = await feedContext(settings);
+  const windows = Object.fromEntries(
+    WINDOW_ORDER.map((window) => [
+      window,
+      windowSlice(context, settings, { window, sort, includeAll: false, offset: 0, limit }),
+    ]),
+  );
+  return { sort, windows };
 }
 
 async function getQualifiedArxivScores(ids) {
@@ -761,7 +846,9 @@ function normalizedTitle(value) {
 async function getSiteMatches(items = []) {
   const settings = await loadSettings();
   if (!settings.showArxivBadges) return {};
-  const qualified = await qualifiedMonth(settings);
+  // Search-result pages are dominated by older work, so highlighting screens the
+  // whole local index rather than the 30-day notification window.
+  const qualified = await qualifiedPapers(settings, { days: null });
   const byDoi = new Map();
   const byArxiv = new Map();
   const byTitle = new Map();
@@ -824,12 +911,26 @@ async function fetchArxivFallback(items) {
   });
 }
 
+// Reports whether the answer is authoritative. A content script cannot tell an
+// empty result caused by a still-warming index from a genuine no-match, and
+// guessing wrong is what made highlighting look permanently broken.
 async function screenSiteItems(items = []) {
+  const settings = await loadSettings();
+  if (!settings.showArxivBadges) return { matches: {}, indexReady: true };
+  // With nothing indexed there is no reference set to score against, so answer
+  // cheaply and locally rather than spending OpenAlex requests on every retry.
+  if (!(await filteredCorpus(settings)).length) return { matches: {}, indexReady: false };
+  return { matches: await screenSiteItemsInner(items), indexReady: true };
+}
+
+async function screenSiteItemsInner(items = []) {
   const local = await getSiteMatches(items);
   const unresolved = items.filter((item) => !local[item.key] && item.title).slice(0, 100);
   if (!unresolved.length) return local;
   const settings = await loadSettings();
-  const client = openAlexClient({ apiKey: settings.apiKey, maxEstimatedCostUsd: settings.incrementalScanBudgetUsd });
+  // The incremental budget is sized for a refresh pass and tripped on the first
+  // page of results, which made live screening silently return nothing.
+  const client = openAlexClient({ apiKey: settings.apiKey, maxEstimatedCostUsd: settings.siteScreenBudgetUsd });
   let resolved = [];
   try { resolved = await client.findWorksByTitles(unresolved.map((item) => item.title)); }
   catch (error) { console.warn("OpenAlex visible-paper lookup failed", error); }
@@ -848,7 +949,7 @@ async function screenSiteItems(items = []) {
   await getProminenceRoster(allAuthors);
   const references = selectReferences(await getAll("works"), settings.maxReferenceWorks);
   const scored = scoreBatch(candidates, references, allAuthors, { maxPeerComparisons: settings.maxPeerComparisons });
-  await bulkPut("works", scored);
+  await storeWorks(scored);
   return getSiteMatches(items);
 }
 
@@ -871,7 +972,7 @@ async function scoreArxivPage({ title, arxivId }) {
   const [scored] = scoreBatch([work], references, allAuthors, {
     maxPeerComparisons: settings.maxPeerComparisons,
   });
-  await bulkPut("works", [scored]);
+  await storeWorks([scored]);
   return scored;
 }
 
@@ -894,6 +995,8 @@ async function handleMessage(message) {
   switch (message?.type) {
     case "GET_FEED":
       return getFeed(message.payload);
+    case "GET_FEED_BUNDLE":
+      return getFeedBundle(message.payload);
     case "GET_STATUS":
       return databaseStats();
     case "GET_TAXONOMY":
@@ -909,6 +1012,9 @@ async function handleMessage(message) {
       await chrome.storage.sync.set({ settings: next });
       return { maxTimeframeDays: next.maxTimeframeDays, discoveryStarted: false };
     }
+    case "CLEAR_FEED_CACHE":
+      feedCorpusCache = null;
+      return { ok: true };
     case "REFRESH":
       return refresh("manual");
     case "REBUILD":
@@ -919,6 +1025,7 @@ async function handleMessage(message) {
       return { ok: true, discoveryStarted: false };
     case "CLEAR_DATA":
       await clearDatabase();
+      feedCorpusCache = null;
       return { ok: true };
     case "GET_ARXIV_SCORES":
       return getQualifiedArxivScores(message.payload?.ids || []);

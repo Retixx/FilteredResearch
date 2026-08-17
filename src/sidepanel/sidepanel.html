@@ -41,8 +41,6 @@
           <button data-window="2w" role="tab">2W</button>
           <button id="max-window-tab" data-window="month" role="tab">1M</button>
           <button data-window="3m" role="tab">3M</button>
-          <button data-window="6m" role="tab">6M</button>
-          <button data-window="year" role="tab">1Y</button>
         </div>
         <label class="sort-control">
           <span>Rank</span>
@@ -55,8 +53,8 @@
         </label>
       </section>
       <section class="depth-control" aria-label="Maximum search timeframe">
-        <label for="max-timeframe"><span>Index depth</span><select id="max-timeframe"><option value="30">1 month · Regular</option><option value="90">3 months · Moderate</option><option value="180">6 months · Deep</option><option value="365">1 year · Extreme</option></select></label>
-        <small id="depth-warning" hidden>Runs only when refreshed</small>
+        <label for="max-timeframe"><span>Index depth</span><select id="max-timeframe"><optgroup label="Light"><option value="1">1 day · Light</option><option value="3">3 days · Light</option></optgroup><optgroup label="Moderate"><option value="7">1 week · Moderate</option><option value="14">2 weeks · Moderate</option></optgroup><optgroup label="Intensive"><option value="30">1 month · Intensive</option><option value="90">3 months · Intensive</option></optgroup></select></label>
+        <small id="depth-warning" hidden>Longer pass · runs only when refreshed</small>
       </section>
 
       <section class="summary" aria-live="polite">

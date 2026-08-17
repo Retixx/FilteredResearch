@@ -9,6 +9,8 @@ const state = {
   resultCount: 0,
   hasMore: false,
   maxTimeframeDays: DEFAULT_SETTINGS.maxTimeframeDays,
+  bundle: null,
+  bundleSort: null,
 };
 
 const BATCH_SIZE = 60;
@@ -183,6 +185,11 @@ function renderNextBatch() {
   return buffered;
 }
 
+function widestWindowWithin(days) {
+  const fits = Object.entries(WINDOWS).filter(([, config]) => config.days <= days);
+  return (fits.at(-1) || Object.entries(WINDOWS)[0])[0];
+}
+
 function updateNotificationBadge(count) {
   const unread = Number(count || 0);
   elements.notificationBadge.hidden = unread <= 0;
@@ -191,7 +198,7 @@ function updateNotificationBadge(count) {
 
 function updateControls() {
   elements.maxTimeframe.value = String(state.maxTimeframeDays);
-  elements.depthWarning.hidden = state.maxTimeframeDays <= 90;
+  elements.depthWarning.hidden = state.maxTimeframeDays < 30;
   for (const tab of elements.tabs) {
     const active = tab.dataset.window === state.window;
     tab.classList.toggle("active", active);
@@ -207,6 +214,56 @@ function showNotice(message, tone = "info") {
   elements.notice.textContent = message || "";
 }
 
+function renderResult(result) {
+  elements.feed.replaceChildren();
+  state.papers = result.papers;
+  state.resultCount = result.resultCount;
+  state.hasMore = result.hasMore;
+  state.renderedCount = 0;
+  renderNextBatch();
+  elements.resultCount.textContent = String(result.resultCount);
+  updateNotificationBadge(result.stats.unreadNotifications);
+  const refreshState = result.stats.refreshState;
+  const discoveryRunning = refreshState?.status === "running";
+  elements.empty.hidden = result.resultCount > 0 || discoveryRunning;
+  elements.feed.hidden = result.resultCount === 0;
+  const lastRefresh = result.stats.lastRefresh;
+  elements.status.textContent = lastRefresh
+    ? `Screened ${new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }).format(
+        Math.round((Date.parse(lastRefresh) - Date.now()) / 3_600_000),
+        "hour",
+      )}`
+    : "Ready for the first screen";
+  const coverage = result.coverage;
+  if (result.requestedBeyondCoverage) {
+    showNotice(`Showing the saved ${result.indexedHorizonDays >= 30 ? `${Math.round(result.indexedHorizonDays / 30)}M` : `${result.indexedHorizonDays}D`} index. Choose a deeper Index depth and press Refresh Research to check older papers.`);
+  } else if (result.settingsChangedAt && (!lastRefresh || Date.parse(result.settingsChangedAt) > Date.parse(lastRefresh))) {
+    showNotice("New settings are filtering saved papers and browser highlights now. Press Refresh Research only when you want new discovery.");
+  } else if (refreshState?.status === "running") {
+    const progress = refreshState.total
+      ? ` ${compactNumber(refreshState.fetched)} of ${compactNumber(refreshState.total)} fetched.`
+      : "";
+    showNotice(`Building ${refreshState.mode} index · ${refreshState.phase || "starting"}.${progress}`);
+  } else if (refreshState?.status === "error") {
+    showNotice(result.stats.refreshState.message, "error");
+  } else if (coverage?.needsApiKey) {
+    showNotice(
+      `Limited preview: ${compactNumber(coverage.limitedRetrieved || 0)} of ${compactNumber(coverage.limitedAvailable || 0)} available papers checked. Add your personal OpenAlex key in settings for complete coverage.`,
+    );
+  } else if (coverage?.fullCompletedAt) {
+    showNotice(
+      `Local index: ${compactNumber(coverage.retrieved)} of ${compactNumber(coverage.available)} papers retrieved (${Math.round(coverage.coveragePercent || 0)}% API coverage).`,
+      "success",
+    );
+  } else if (!lastRefresh) {
+    showNotice("First run creates a limited preview. A personal key plus a selected field enables exhaustive indexing.");
+  } else {
+    showNotice("");
+  }
+}
+
+// One request builds every date view, so switching tabs is a local render with
+// no message round trip and no dependency on the service worker staying alive.
 async function loadFeed({ skeleton = true } = {}) {
   if (state.loading) return;
   state.loading = true;
@@ -215,58 +272,12 @@ async function loadFeed({ skeleton = true } = {}) {
   if (skeleton) elements.empty.hidden = true;
   updateControls();
   try {
-    const result = await send("GET_FEED", {
-      window: state.window,
-      sort: state.sort,
-      offset: 0,
-      limit: PAGE_SIZE,
-    });
-    elements.feed.replaceChildren();
-    state.papers = result.papers;
-    state.resultCount = result.resultCount;
-    state.hasMore = result.hasMore;
-    state.renderedCount = 0;
-    renderNextBatch();
-    elements.resultCount.textContent = String(result.resultCount);
-    updateNotificationBadge(result.stats.unreadNotifications);
-    const refreshState = result.stats.refreshState;
-    const discoveryRunning = refreshState?.status === "running";
-    elements.empty.hidden = result.resultCount > 0 || discoveryRunning;
-    elements.feed.hidden = result.resultCount === 0;
-    const lastRefresh = result.stats.lastRefresh;
-    elements.status.textContent = lastRefresh
-      ? `Screened ${new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }).format(
-          Math.round((Date.parse(lastRefresh) - Date.now()) / 3_600_000),
-          "hour",
-        )}`
-      : "Ready for the first screen";
-    const coverage = result.coverage;
-    if (result.requestedBeyondCoverage) {
-      showNotice(`Showing the saved ${result.indexedHorizonDays >= 30 ? `${Math.round(result.indexedHorizonDays / 30)}M` : `${result.indexedHorizonDays}D`} index. Choose a deeper Index depth and press Refresh Research to check older papers.`);
-    } else if (result.settingsChangedAt && (!lastRefresh || Date.parse(result.settingsChangedAt) > Date.parse(lastRefresh))) {
-      showNotice("New settings are filtering saved papers and browser highlights now. Press Refresh Research only when you want new discovery.");
-    } else if (refreshState?.status === "running") {
-      const progress = refreshState.total
-        ? ` ${compactNumber(refreshState.fetched)} of ${compactNumber(refreshState.total)} fetched.`
-        : "";
-      showNotice(`Building ${refreshState.mode} index · ${refreshState.phase || "starting"}.${progress}`);
-    } else if (refreshState?.status === "error") {
-      showNotice(result.stats.refreshState.message, "error");
-    } else if (coverage?.needsApiKey) {
-      showNotice(
-        `Limited preview: ${compactNumber(coverage.limitedRetrieved || 0)} of ${compactNumber(coverage.limitedAvailable || 0)} available papers checked. Add your personal OpenAlex key in settings for complete coverage.`,
-      );
-    } else if (coverage?.fullCompletedAt) {
-      showNotice(
-        `Local index: ${compactNumber(coverage.retrieved)} of ${compactNumber(coverage.available)} papers retrieved (${Math.round(coverage.coveragePercent || 0)}% API coverage).`,
-        "success",
-      );
-    } else if (!lastRefresh) {
-      showNotice("First run creates a limited preview. A personal key plus a selected field enables exhaustive indexing.");
-    } else {
-      showNotice("");
-    }
+    const bundle = await send("GET_FEED_BUNDLE", { sort: state.sort, limit: PAGE_SIZE });
+    state.bundle = bundle.windows;
+    state.bundleSort = bundle.sort;
+    renderResult(state.bundle[state.window] || Object.values(state.bundle)[0]);
   } catch (error) {
+    state.bundle = null;
     elements.feed.replaceChildren();
     elements.empty.hidden = false;
     showNotice(error.message, "error");
@@ -274,6 +285,17 @@ async function loadFeed({ skeleton = true } = {}) {
     state.loading = false;
     elements.feed.setAttribute("aria-busy", "false");
   }
+}
+
+function showWindow(window) {
+  state.window = window;
+  updateControls();
+  const cached = state.bundle?.[window];
+  if (cached && state.bundleSort === state.sort) {
+    renderResult(cached);
+    return;
+  }
+  loadFeed({ skeleton: false });
 }
 
 async function loadMore() {
@@ -296,6 +318,13 @@ async function loadMore() {
     state.papers.push(...result.papers);
     state.resultCount = result.resultCount;
     state.hasMore = result.hasMore;
+    // Keep the cached window in step so returning to this tab still shows the
+    // pages that were already loaded.
+    const cached = state.bundle?.[state.window];
+    if (cached && cached.papers === state.papers) {
+      cached.resultCount = result.resultCount;
+      cached.hasMore = result.hasMore;
+    }
     renderNextBatch();
   } catch (error) {
     showNotice(error.message, "error");
@@ -326,10 +355,7 @@ async function refresh() {
 }
 
 for (const tab of elements.tabs) {
-  tab.addEventListener("click", () => {
-    state.window = tab.dataset.window;
-    loadFeed({ skeleton: false });
-  });
+  tab.addEventListener("click", () => showWindow(tab.dataset.window));
 }
 elements.sort.addEventListener("change", () => {
   state.sort = elements.sort.value;
@@ -341,7 +367,12 @@ elements.maxTimeframe.addEventListener("change", async () => {
   try {
     const result = await send("SET_MAX_TIMEFRAME", { days });
     state.maxTimeframeDays = result.maxTimeframeDays;
-    updateControls();
+    // Depth bounds every window, so the cached bundle no longer describes the feed.
+    state.bundle = null;
+    if ((WINDOWS[state.window]?.days || 7) > state.maxTimeframeDays) {
+      state.window = widestWindowWithin(state.maxTimeframeDays);
+    }
+    await loadFeed({ skeleton: false });
     showNotice("Index depth saved locally. Press refresh when you want to run discovery; no API request was made.", "success");
   } catch (error) { showNotice(error.message, "error"); }
   finally { elements.maxTimeframe.disabled = false; }
@@ -360,7 +391,9 @@ chrome.storage.sync.get("settings").then(({ settings }) => {
   state.window = settings?.defaultWindow || state.window;
   state.sort = settings?.defaultSort || state.sort;
   state.maxTimeframeDays = Number(settings?.maxTimeframeDays || state.maxTimeframeDays);
-  if ((WINDOWS[state.window]?.days || 7) > state.maxTimeframeDays) state.window = state.maxTimeframeDays >= 30 ? "month" : "week";
+  if ((WINDOWS[state.window]?.days || 7) > state.maxTimeframeDays) {
+    state.window = widestWindowWithin(state.maxTimeframeDays);
+  }
   updateControls();
   loadFeed();
 });

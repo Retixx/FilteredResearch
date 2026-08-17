@@ -74,6 +74,25 @@ export async function getMetadata(key) {
   return value?.value;
 }
 
+// One connection and one transaction for a whole set of keys. Reading metadata
+// one key at a time opened and closed the database once per key, which was a
+// large share of the cost of building a feed.
+export async function getMetadataMany(keys = []) {
+  const unique = [...new Set(keys.filter(Boolean))];
+  if (!unique.length) return {};
+  const database = await openDatabase();
+  try {
+    const transaction = database.transaction("metadata", "readonly");
+    const store = transaction.objectStore("metadata");
+    const pairs = await Promise.all(
+      unique.map(async (key) => [key, (await requestToPromise(store.get(key)))?.value]),
+    );
+    return Object.fromEntries(pairs);
+  } finally {
+    database.close();
+  }
+}
+
 export async function setMetadata(key, value) {
   await bulkPut("metadata", [{ key, value }]);
 }
@@ -156,20 +175,60 @@ export async function deleteBaselineWorks() {
   }
 }
 
-export async function databaseStats() {
-  const [works, authors, lastRefresh, refreshState, notificationInbox] = await Promise.all([
-    getAll("works"),
-    getAll("authors"),
-    getMetadata("lastRefresh"),
-    getMetadata("refreshState"),
-    getMetadata("notificationInbox"),
+// Everything the sidebar actually displays, without reading a single work or
+// author record. The feed calls this on every render, so it must stay O(1) in
+// the size of the corpus.
+export async function feedStats() {
+  const { lastRefresh, refreshState, notificationInbox } = await getMetadataMany([
+    "lastRefresh",
+    "refreshState",
+    "notificationInbox",
   ]);
   return {
-    candidates: works.filter((work) => !work.isBaseline).length,
-    baseline: works.filter((work) => work.isBaseline).length,
-    authors: authors.length,
     lastRefresh: lastRefresh || null,
     refreshState: refreshState || null,
     unreadNotifications: (notificationInbox || []).filter((item) => item.unread).length,
   };
+}
+
+async function countStore(storeName) {
+  const database = await openDatabase();
+  try {
+    const transaction = database.transaction(storeName, "readonly");
+    return await requestToPromise(transaction.objectStore(storeName).count());
+  } finally {
+    database.close();
+  }
+}
+
+// Full corpus counts, for the settings page only. Totals come from native
+// counts; splitting baseline from candidate rows still needs a walk because
+// `isBaseline` is not indexed. Keep this off the feed path.
+export async function databaseStats() {
+  const [works, authors, light] = await Promise.all([
+    countStore("works"),
+    countStore("authors"),
+    feedStats(),
+  ]);
+  const database = await openDatabase();
+  let baseline = 0;
+  try {
+    const transaction = database.transaction("works", "readonly");
+    const request = transaction.objectStore("works").openCursor();
+    await new Promise((resolve, reject) => {
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) {
+          resolve();
+          return;
+        }
+        if (cursor.value.isBaseline) baseline += 1;
+        cursor.continue();
+      };
+      request.onerror = () => reject(request.error);
+    });
+  } finally {
+    database.close();
+  }
+  return { ...light, candidates: works - baseline, baseline, authors };
 }

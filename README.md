@@ -1,15 +1,20 @@
 # FilteredResearch
 
-FilteredResearch v0.5.2 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
+FilteredResearch v0.5.4 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
 
 - **Novelty**: lexical distance from up to 320 older, field-adjacent OpenAlex papers, adjusted for evidence completeness, rare title phrases, cross-field combinations, and incremental wording.
 - **Authorship**: an established-track-record signal using author h-index, citations, recent citedness, works count, ORCID presence, and authorship role.
 
 Neither score proves scientific novelty, quality, correctness, reputation, or significance. They are screening heuristics for deciding what to inspect next.
 
-## What changed in v0.5.2
+## What changed in v0.5.4
 
-- A compact sidebar control labels 1 month as Regular, 3 months as Moderate, 6 months as Deep, and 1 year as Extreme. Changing it never starts discovery.
+- Index depth offers six options in three tiers — 1 day and 3 days (Light), 1 week and 2 weeks (Moderate), 1 month and 3 months (Intensive). The 6-month and 1-year depths are gone: they retrieved far more works than the scoring stage could keep up with, which was the direct cause of slow discovery. Changing depth never starts discovery.
+- Switching date views is immediate again. One request builds every view from a single corpus scan and the sidebar renders tab switches from that response, so no switch waits on the service worker.
+- On-page highlighting works. It had screened only the last thirty days of papers, so the older work that fills search-result pages could never match; it now screens the whole local index under its own request budget.
+- Subfield disclosure rows were redesigned with pill-style counts, hover and open states, and responsive columns.
+
+## Earlier, in v0.5.2
 - Category labels and codes are loaded from arXiv's official eight-group, 155-category taxonomy and cached locally for 30 days.
 - Discovery runs only when the user presses refresh (or the explicit one-time discovery button), can retrieve up to 1,000,000 works, and leaves the saved feed unchanged until the pass completes.
 - AI-labeled records require AI evidence in the title or abstract, and user interests match title/abstract phrases within a bounded window.

@@ -11,9 +11,23 @@ export const WINDOWS = Object.freeze({
   "2w": { label: "Past 2 weeks", days: 14 },
   month: { label: "Past month", days: 30 },
   "3m": { label: "Past 3 months", days: 90 },
-  "6m": { label: "Past 6 months", days: 180 },
-  year: { label: "Past year", days: 365 },
 });
+
+export const WINDOW_ORDER = Object.freeze(Object.keys(WINDOWS));
+
+// Index depth drives how far back a discovery pass reaches. Depths beyond three
+// months made every pass fetch far more works than the scoring stage could keep
+// up with, so the ceiling matches the widest local view.
+export const INDEX_DEPTHS = Object.freeze([
+  { days: 1, label: "1 day", tier: "Light" },
+  { days: 3, label: "3 days", tier: "Light" },
+  { days: 7, label: "1 week", tier: "Moderate" },
+  { days: 14, label: "2 weeks", tier: "Moderate" },
+  { days: 30, label: "1 month", tier: "Intensive" },
+  { days: 90, label: "3 months", tier: "Intensive" },
+]);
+
+export const MAX_INDEX_DEPTH_DAYS = 90;
 
 export const DEFAULT_SETTINGS = Object.freeze({
   queries: [],
@@ -42,6 +56,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   fullRebuildDays: 7,
   fullScanBudgetUsd: 0.95,
   incrementalScanBudgetUsd: 0.02,
+  siteScreenBudgetUsd: 0.15,
   showArxivBadges: true,
 });
 
@@ -106,10 +121,11 @@ export function normalizeSettings(value = {}) {
     maxReferenceWorks: [1000, 20_000],
     maxPeerComparisons: [50, 800],
     incrementalLookbackDays: [1, 7],
-    maxTimeframeDays: [30, 365],
+    maxTimeframeDays: [1, MAX_INDEX_DEPTH_DAYS],
     fullRebuildDays: [3, 30],
     fullScanBudgetUsd: [0.05, 0.95],
     incrementalScanBudgetUsd: [0.005, 0.1],
+    siteScreenBudgetUsd: [0.02, 0.5],
   };
   for (const [key, [minimum, maximum]] of Object.entries(numericBounds)) {
     const parsed = Number(merged[key]);
@@ -117,6 +133,13 @@ export function normalizeSettings(value = {}) {
       ? Math.min(maximum, Math.max(minimum, parsed))
       : DEFAULT_SETTINGS[key];
   }
+  // A saved 6-month or 1-year depth clamps into range above; snap it (and any
+  // other stale value) onto a depth the picker can actually display.
+  merged.maxTimeframeDays = INDEX_DEPTHS.reduce((closest, depth) =>
+    Math.abs(depth.days - merged.maxTimeframeDays) < Math.abs(closest - merged.maxTimeframeDays)
+      ? depth.days
+      : closest,
+  DEFAULT_SETTINGS.maxTimeframeDays);
   merged.perQuery = Math.max(merged.perQuery, DEFAULT_SETTINGS.perQuery);
   merged.maxDiscoveryWorks = Math.max(merged.maxDiscoveryWorks, DEFAULT_SETTINGS.maxDiscoveryWorks);
   merged.fullScanBudgetUsd = Math.max(merged.fullScanBudgetUsd, DEFAULT_SETTINGS.fullScanBudgetUsd);

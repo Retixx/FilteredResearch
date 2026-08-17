@@ -1,5 +1,5 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FilteredResearch settings</title><link rel="stylesheet" href="options.css"></head>
-<body><header class="top"><div class="wordmark"><span>FR</span><b>FilteredResearch</b></div><small>SETTINGS · v0.5.2</small></header>
+<body><header class="top"><div class="wordmark"><span>FR</span><b>FilteredResearch</b></div><small>SETTINGS · v0.5.4</small></header>
 <main><div class="title"><h1>Research settings</h1><p>Filters are local. New interests reuse papers already in your index.</p></div>
 <form id="settings-form">
   <section><div class="section-head"><h2>Scope</h2><p>A paper must match the selected category and one interest phrase.</p></div>
@@ -14,7 +14,7 @@
     <div class="scale"><span>1 · nearly all</span><span>40 · top 50%</span><span>60 · top 20%</span><span>80 · top 5%</span><span>100 · extreme</span></div>
   </section>
   <section><div class="section-head"><h2>Feed & updates</h2></div><div class="grid">
-    <label>Default range<select id="default-window"><option value="day">Past day</option><option value="3d">Past 3 days</option><option value="week">Past week</option><option value="2w">Past 2 weeks</option><option value="month">Past month</option><option value="3m">Past 3 months</option><option value="6m">Past 6 months</option><option value="year">Past year</option></select></label>
+    <label>Default range<select id="default-window"><option value="day">Past day</option><option value="3d">Past 3 days</option><option value="week">Past week</option><option value="2w">Past 2 weeks</option><option value="month">Past month</option><option value="3m">Past 3 months</option></select></label>
     <label>Default ranking<select id="default-sort"><option value="balanced">Best signal</option><option value="novelty">Novelty</option><option value="researcher">Authorship</option><option value="newest">Newest</option></select></label></div>
     <p class="hint">Discovery is manual. Saving settings never calls OpenAlex; use refresh in the sidebar when you want a new one-time pass.</p>
     <label class="check"><input id="show-arxiv-badges" type="checkbox"> Highlight matching papers on research sites</label><label class="check"><input id="notifications-enabled" type="checkbox"> Notify me when a new paper clears both bars</label>
