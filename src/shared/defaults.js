@@ -10,6 +10,9 @@ export const WINDOWS = Object.freeze({
   week: { label: "Past week", days: 7 },
   "2w": { label: "Past 2 weeks", days: 14 },
   month: { label: "Past month", days: 30 },
+  "3m": { label: "Past 3 months", days: 90 },
+  "6m": { label: "Past 6 months", days: 180 },
+  year: { label: "Past year", days: 365 },
 });
 
 export const DEFAULT_SETTINGS = Object.freeze({
@@ -29,12 +32,12 @@ export const DEFAULT_SETTINGS = Object.freeze({
   historyYears: 3,
   maxQueries: 5,
   maxAuthors: 50_000,
-  maxDiscoveryWorks: 50_000,
+  maxDiscoveryWorks: 200_000,
   maxReferenceWorks: 6_000,
   maxPeerComparisons: 320,
   incrementalLookbackDays: 2,
   fullRebuildDays: 7,
-  fullScanBudgetUsd: 0.25,
+  fullScanBudgetUsd: 0.75,
   incrementalScanBudgetUsd: 0.02,
   showArxivBadges: true,
 });
@@ -90,7 +93,7 @@ export function normalizeSettings(value = {}) {
     baselinePerSubfield: [100, 500],
     historyYears: [1, 10],
     maxAuthors: [1000, 100_000],
-    maxDiscoveryWorks: [5000, 100_000],
+    maxDiscoveryWorks: [5000, 250_000],
     maxReferenceWorks: [1000, 20_000],
     maxPeerComparisons: [50, 800],
     incrementalLookbackDays: [1, 7],

@@ -19,7 +19,7 @@ Content scripts do not make external network requests. FilteredResearch does not
 
 ## Retention and deletion
 
-Recent candidates are retained for up to 60 days. A historical field comparison corpus is retained until the filter scope changes or the user clears data. The notification inbox is retained locally until cleared.
+Candidates are retained for up to 400 days. Saved configurations, local API-usage estimates, and a historical field comparison corpus remain until the user clears data. The notification inbox is retained locally until cleared.
 
 Users can:
 

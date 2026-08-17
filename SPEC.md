@@ -1,10 +1,10 @@
-# FilteredResearch v0.3 specification
+# FilteredResearch v0.4 specification
 
 ## Product contract
 
 FilteredResearch is an open-source, local-first Chrome extension for finding recent papers that are both lexically unusual within their field and associated with an established authorship track record. It is not a publisher crawler, paper archive, citation recommender, peer-review substitute, or AI research product.
 
-The primary user chooses an OpenAlex field/subfield, builds a 30-day index, adjusts logarithmic novelty and authorship selectivity, and browses day/3-day/week/2-week/month views. Matching papers can be marked on supported scholarly sites and can generate optional notifications.
+The primary user chooses an OpenAlex field/subfield, builds a rolling one-year index, adjusts logarithmic novelty and authorship selectivity, and browses day/3-day/week/2-week/month/3-month/6-month/year views. Matching papers can be marked on supported scholarly sites and can generate optional notifications.
 
 ## Functional requirements
 
@@ -16,9 +16,9 @@ The primary user chooses an OpenAlex field/subfield, builds a 30-day index, adju
 - Require a user-owned OpenAlex key for exhaustive indexing. Never ship a shared key.
 - Without a key, label the result as a limited preview and retrieve no more than 500 works.
 - If no taxonomy field is selected, use a rotating cross-disciplinary preview rather than claiming exhaustive global coverage.
-- Scheduled/startup checks use a two-day overlap, deduplicate by OpenAlex ID, and preserve the last complete 30-day index.
+- Scheduled/startup checks use a two-day overlap, group records by DOI/arXiv/title-author identity, and preserve the rolling one-year index.
 - Full rebuild runs only for a new focused scope, a first keyed run, or explicit user action.
-- Enforce per-run guards of $0.25 full and $0.02 incremental by estimated OpenAlex request costs.
+- Enforce per-run guards of $0.75 full and $0.02 incremental by estimated OpenAlex request costs; show locally recorded daily usage in Settings.
 
 ### Filters
 
@@ -58,7 +58,7 @@ The primary user chooses an OpenAlex field/subfield, builds a 30-day index, adju
 - `chrome.storage.sync`: non-secret settings.
 - `chrome.storage.local`: user OpenAlex key only, restricted to trusted extension contexts.
 - IndexedDB: works, baseline references, author profiles, refresh metadata, and notification inbox.
-- Non-baseline candidates older than 60 days are pruned.
+- Non-baseline candidates older than 400 days are pruned.
 - Scope/scoring-version changes invalidate the baseline comparison set.
 - A clear-data action deletes IndexedDB state; saving an empty key removes the key value.
 

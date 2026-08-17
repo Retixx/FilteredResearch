@@ -11,6 +11,32 @@ let currentSettings = null;
 let taxonomy = [];
 let formDirty = false;
 
+function renderUsage(usage = {}) {
+  const cost = Math.max(0, Number(usage.costUsd || 0));
+  document.querySelector("#usage-cost").textContent = `$${cost.toFixed(3)}`;
+  document.querySelector("#usage-bar").style.width = `${Math.min(100, cost * 100)}%`;
+  document.querySelector("#usage-detail").textContent = `${Number(usage.requests || 0)} requests recorded today${usage.hasEstimatedCalls ? " · includes estimates" : " · provider-reported where available"}. Resets at midnight UTC.`;
+}
+
+function applySavedConfig(saved) {
+  currentSettings = { ...currentSettings, ...saved };
+  document.querySelector("#queries").value = (saved.queries || []).join("\n");
+  novelty.value = saved.noveltySelectivity || novelty.value; authorship.value = saved.authorshipSelectivity || authorship.value;
+  document.querySelector("#default-window").value = saved.defaultWindow || "week"; document.querySelector("#default-sort").value = saved.defaultSort || "balanced";
+  renderTaxonomy(currentSettings); syncRanges(); formDirty = true; status.textContent = "Configuration restored. Save to apply it.";
+}
+
+function renderHistory(history = []) {
+  const container = document.querySelector("#search-history"); container.replaceChildren();
+  if (!history.length) { const empty = document.createElement("p"); empty.className = "hint"; empty.textContent = "No saved configurations yet."; container.append(empty); return; }
+  for (const entry of history) {
+    const row = document.createElement("div"); row.className = "history-row"; const copy = document.createElement("div");
+    const scope = entry.settings?.selectedSubfields?.length ? `${entry.settings.selectedSubfields.length} subfields` : entry.settings?.selectedFields?.length ? `${entry.settings.selectedFields.length} fields` : "Preview";
+    copy.textContent = entry.settings?.queries?.join(" · ") || scope; const meta = document.createElement("small"); meta.textContent = `${scope} · ${entry.resultCount || 0} matched · ${new Date(entry.savedAt).toLocaleString()}`; copy.append(meta);
+    const button = document.createElement("button"); button.type = "button"; button.textContent = "Restore"; button.addEventListener("click", () => applySavedConfig(entry.settings || {})); row.append(copy, button); container.append(row);
+  }
+}
+
 async function send(type, payload) {
   const response = await chrome.runtime.sendMessage({ type, payload });
   if (!response?.ok) throw new Error(response?.error || "The extension did not respond");
@@ -119,7 +145,7 @@ novelty.addEventListener("input", syncRanges);
 authorship.addEventListener("input", syncRanges);
 
 async function populate() {
-  const [settings, fields] = await Promise.all([loadSettings(), send("GET_TAXONOMY")]);
+  const [settings, fields, usage, history] = await Promise.all([loadSettings(), send("GET_TAXONOMY"), send("GET_API_USAGE"), send("GET_SEARCH_HISTORY")]);
   currentSettings = settings;
   taxonomy = fields;
   document.querySelector("#queries").value = settings.queries.join("\n");
@@ -134,6 +160,7 @@ async function populate() {
   document.querySelector("#api-key").value = settings.apiKey;
   renderTaxonomy(settings);
   syncRanges();
+  renderUsage(usage); renderHistory(history);
 }
 
 async function resolveNotificationPermission(requested) {
@@ -173,7 +200,7 @@ form.addEventListener("submit", async (event) => {
     formDirty = false;
     await send("SETTINGS_CHANGED");
     status.textContent = currentSettings.selectedFields.length || currentSettings.selectedSubfields.length
-      ? "Saved. Filters apply now; a new field scope automatically starts a complete 30-day build."
+      ? "Saved. Local filters apply now; only a new category scope starts a backfill."
       : "Saved. With no field selected, the feed uses a cross-disciplinary preview.";
   } catch (error) {
     status.textContent = error.message;
@@ -195,10 +222,11 @@ document.querySelector("#rebuild-index").addEventListener("click", async (event)
     return;
   }
   event.currentTarget.disabled = true;
-  status.textContent = "Rebuilding the full 30-day index… keep Chrome open; broad fields can take several minutes.";
+  status.textContent = "Rebuilding the rolling 1-year index… keep Chrome open; broad fields can take several minutes.";
   try {
     const result = await send("REBUILD");
     status.textContent = `Indexed ${result.indexedRetrieved} papers; estimated OpenAlex cost $${Number(result.estimatedApiCostUsd || 0).toFixed(3)}.`;
+    renderUsage(await send("GET_API_USAGE")); renderHistory(await send("GET_SEARCH_HISTORY"));
   } catch (error) {
     status.textContent = error.message;
   } finally {

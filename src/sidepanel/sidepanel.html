@@ -40,6 +40,9 @@
           <button data-window="week" role="tab">1W</button>
           <button data-window="2w" role="tab">2W</button>
           <button data-window="month" role="tab">1M</button>
+          <button data-window="3m" role="tab">3M</button>
+          <button data-window="6m" role="tab">6M</button>
+          <button data-window="year" role="tab">1Y</button>
         </div>
         <label class="sort-control">
           <span>Rank</span>
@@ -58,7 +61,6 @@
           <span id="summary-copy">papers cleared your bar</span>
           <span id="shown-copy" class="shown-copy"></span>
         </div>
-        <button id="show-all-button" class="text-button" type="button">Show screened</button>
       </section>
 
       <section id="notice" class="notice" hidden></section>
@@ -68,7 +70,7 @@
       <section id="empty-state" class="empty-state" hidden>
         <div class="empty-orbit" aria-hidden="true"><span></span></div>
         <h2>No papers cleared the bar yet</h2>
-        <p>Set a field and personal OpenAlex key, then build the complete 30-day index.</p>
+        <p>Set a field and personal OpenAlex key, then build the rolling one-year index.</p>
         <div class="empty-actions">
           <button id="empty-refresh" class="primary-button" type="button">Screen research</button>
           <button id="empty-settings" class="secondary-button" type="button">Add interests</button>
@@ -87,6 +89,7 @@
           </div>
           <a class="paper-title" target="_blank" rel="noreferrer"></a>
           <p class="paper-authors"></p>
+          <div class="paper-badges"></div>
           <div class="scores">
             <div class="score score-novelty">
               <div class="score-label"><span>Novelty</span><strong></strong></div>
@@ -98,8 +101,9 @@
             </div>
           </div>
           <p class="paper-why"></p>
+          <p class="paper-interest" hidden></p>
           <div class="paper-footer">
-            <span class="paper-source"></span>
+            <span class="paper-sources"></span>
             <button class="details-button" type="button">Evidence</button>
           </div>
           <div class="evidence" hidden></div>

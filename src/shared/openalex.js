@@ -136,6 +136,8 @@ export function normalizeWork(payload, { baseline = false, maxAuthors = 25 } = {
       orcid: entry.author?.orcid || null,
       position: entry.author_position || "middle",
       isCorresponding: Boolean(entry.is_corresponding),
+      institutions: (entry.institutions || []).map((item) => cleanScholarlyText(item.display_name, { repairSpacing: false })).filter(Boolean),
+      rawAffiliations: (entry.raw_affiliation_strings || []).map((item) => cleanScholarlyText(item, { repairSpacing: false })).filter(Boolean),
     }))
     .filter((entry) => entry.authorId);
   return {
@@ -153,6 +155,11 @@ export function normalizeWork(payload, { baseline = false, maxAuthors = 25 } = {
       cleanScholarlyText(primaryLocation.source?.display_name, { repairSpacing: false }) || null,
     workType: payload.type || "article",
     arxivId: extractArxivId(locations),
+    sources: [...new Map(locations.map((location) => ({
+      name: cleanScholarlyText(location.source?.display_name, { repairSpacing: false }) || "Repository",
+      url: location.landing_page_url || location.pdf_url || payload.doi || payload.id,
+      doi: payload.doi || null,
+    })).filter((source) => source.url).map((source) => [`${source.name}|${source.url}`, source])).values()],
     authorships,
     topics: (payload.topics || []).slice(0, 10).map(topicParts),
     ...primary,
@@ -200,12 +207,13 @@ export function cleanWorkForDisplay(work) {
 }
 
 export class OpenAlexClient {
-  constructor({ apiKey = "", timeoutMs = 25_000, maxEstimatedCostUsd = Infinity } = {}) {
+  constructor({ apiKey = "", timeoutMs = 25_000, maxEstimatedCostUsd = Infinity, onUsage = null } = {}) {
     this.apiKey = apiKey;
     this.timeoutMs = timeoutMs;
     this.maxEstimatedCostUsd = maxEstimatedCostUsd;
     this.costUsd = 0;
     this.estimatedCostUsd = 0;
+    this.onUsage = onUsage;
   }
 
   async request(endpoint, parameters) {
@@ -245,7 +253,19 @@ export class OpenAlexClient {
           throw new Error(`OpenAlex returned ${response.status}: ${(await response.text()).slice(0, 300)}`);
         }
         const payload = await response.json();
-        this.costUsd += Number(payload.meta?.cost_usd || 0);
+        const actualCost = Number(payload.meta?.cost_usd || 0);
+        this.costUsd += actualCost;
+        try {
+          await this.onUsage?.({
+            costUsd: actualCost || estimatedCost,
+            estimated: !actualCost,
+            remaining: Number(response.headers.get("X-RateLimit-Remaining")),
+            limit: Number(response.headers.get("X-RateLimit-Limit")),
+            resetSeconds: Number(response.headers.get("X-RateLimit-Reset")),
+          });
+        } catch (usageError) {
+          console.warn("Could not record OpenAlex usage", usageError);
+        }
         return payload;
       } catch (error) {
         if (attempt >= 4 || (error.name !== "AbortError" && !String(error).includes("fetch"))) {

@@ -1,159 +1,31 @@
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>FilteredResearch settings</title>
-    <link rel="stylesheet" href="options.css" />
-  </head>
-  <body>
-    <header class="masthead">
-      <div class="wordmark"><span>FR</span> FilteredResearch</div>
-      <p>Local research index / v0.3</p>
-    </header>
-
-    <main>
-      <section class="intro">
-        <p class="eyebrow">Settings</p>
-        <h1>Define the edges of your research world.</h1>
-        <p>
-          Choose an OpenAlex field or drill into its subfields. A personal API key unlocks an
-          exhaustive 30-day index for the selected scope.
-        </p>
-      </section>
-
-      <form id="settings-form">
-        <section class="setting-section">
-          <div class="section-number">01</div>
-          <div class="section-copy">
-            <h2>Research interests</h2>
-            <p>One phrase per line, up to five. A paper must match at least one phrase.</p>
-          </div>
-          <div class="section-control wide">
-            <label for="queries">Topics or questions</label>
-            <textarea id="queries" rows="6" placeholder="energy storage without rare metals&#10;urban climate adaptation&#10;origin of multicellularity"></textarea>
-          </div>
-        </section>
-
-        <section class="setting-section">
-          <div class="section-number">02</div>
-          <div class="section-copy">
-            <h2>Research categories</h2>
-            <p>Select an entire field in one click, or open it and choose individual subfields.</p>
-          </div>
-          <div class="section-control category-control">
-            <details class="category-picker">
-              <summary>
-                <span id="category-summary">All research</span>
-                <span aria-hidden="true">Choose ↓</span>
-              </summary>
-              <div id="category-options" class="category-options"></div>
-            </details>
-            <label class="check-label">
-              <input id="english-only" type="checkbox" />
-              English-language papers only
-            </label>
-          </div>
-        </section>
-
-        <section class="setting-section">
-          <div class="section-number">03</div>
-          <div class="section-copy">
-            <h2>Acceptance bar</h2>
-            <p>Each logarithmic control keeps the strongest percentile on that signal. A paper must clear both.</p>
-          </div>
-          <div class="section-control range-grid">
-            <label for="novelty-selectivity">Novelty selectivity <output id="novelty-selectivity-value">70</output></label>
-            <input id="novelty-selectivity" type="range" min="1" max="100" step="1" />
-            <p id="novelty-guide" class="range-guide"></p>
-            <label for="authorship-selectivity">Authorship selectivity <output id="authorship-selectivity-value">70</output></label>
-            <input id="authorship-selectivity" type="range" min="1" max="100" step="1" />
-            <p id="authorship-guide" class="range-guide"></p>
-            <div class="selectivity-scale" aria-hidden="true">
-              <span><b>1</b> nearly all</span><span><b>40</b> top 50%</span><span><b>60</b> top 20%</span><span><b>80</b> top 5%</span><span><b>100</b> extreme</span>
-            </div>
-          </div>
-        </section>
-
-        <section class="setting-section">
-          <div class="section-number">04</div>
-          <div class="section-copy">
-            <h2>Feed behavior</h2>
-            <p>Choose the starting view and how frequently Chrome wakes the scanner.</p>
-          </div>
-          <div class="section-control split-grid">
-            <label>Default range
-              <select id="default-window">
-                <option value="day">Past day</option>
-                <option value="3d">Past 3 days</option>
-                <option value="week">Past week</option>
-                <option value="2w">Past 2 weeks</option>
-                <option value="month">Past month</option>
-              </select>
-            </label>
-            <label>Default ranking
-              <select id="default-sort">
-                <option value="balanced">Best signal</option>
-                <option value="novelty">Novelty</option>
-                <option value="researcher">Authorship</option>
-                <option value="newest">Newest</option>
-              </select>
-            </label>
-            <label>Refresh interval
-              <select id="refresh-hours">
-                <option value="3">Every 3 hours</option>
-                <option value="6">Every 6 hours</option>
-                <option value="12">Every 12 hours</option>
-                <option value="24">Daily</option>
-              </select>
-            </label>
-            <label class="check-label">
-              <input id="show-arxiv-badges" type="checkbox" />
-              Highlight matching papers on supported research sites
-            </label>
-            <label class="check-label">
-              <input id="notifications-enabled" type="checkbox" />
-              Notify me when a newly published paper clears my filters
-            </label>
-          </div>
-        </section>
-
-        <section class="setting-section">
-          <div class="section-number">05</div>
-          <div class="section-copy">
-            <h2>OpenAlex access</h2>
-            <p>Your own free key is required for an exhaustive index. It stays in this Chrome profile and is never bundled or shared.</p>
-          </div>
-          <div class="section-control wide">
-            <label for="api-key">API key</label>
-            <input id="api-key" type="password" autocomplete="off" placeholder="Required for exhaustive indexing" />
-            <a href="https://openalex.org/settings/api" target="_blank" rel="noreferrer">Get a free OpenAlex key ↗</a>
-            <button id="rebuild-index" class="secondary-action" type="button">Rebuild complete 30-day index</button>
-            <p class="fine-print">A focused AI scan was measured at about 2 minutes and $0.02 of OpenAlex allowance; broader fields take longer. Routine notifications only check the newest two days.</p>
-            <p class="fine-print">Requests go directly to OpenAlex and are subject to its <a href="https://openalex.org/OpenAlex_termsofservice.pdf" target="_blank" rel="noreferrer">Terms</a> and <a href="https://openalex.org/OpenAlex_privacy_policy.pdf" target="_blank" rel="noreferrer">Privacy Policy</a>.</p>
-          </div>
-        </section>
-
-        <footer class="form-actions">
-          <div id="save-status" role="status"></div>
-          <button class="save-button" type="submit">Save settings</button>
-        </footer>
-      </form>
-
-      <section class="data-section">
-        <div>
-          <p class="eyebrow">Local data</p>
-          <h2>Nothing is sent to a FilteredResearch server.</h2>
-          <p>Papers, author metrics, and your key live in Chrome's extension storage. On supported research sites, titles and identifiers are inspected locally only to mark papers already in your qualifying index.</p>
-        </div>
-        <button id="clear-data" type="button">Clear research database</button>
-      </section>
-
-      <footer class="credits">
-        Open-source software developed with assistance from OpenAI Codex; not affiliated with or endorsed by OpenAI. Scores are discovery heuristics, not peer review or claims of scientific merit.
-      </footer>
-    </main>
-
-    <script type="module" src="options.js"></script>
-  </body>
-</html>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FilteredResearch settings</title><link rel="stylesheet" href="options.css"></head>
+<body><header class="top"><div class="wordmark"><span>FR</span><b>FilteredResearch</b></div><small>SETTINGS · v0.4</small></header>
+<main><div class="title"><h1>Research settings</h1><p>Filters are local. New interests reuse papers already in your index.</p></div>
+<form id="settings-form">
+  <section><div class="section-head"><h2>Scope</h2><p>A paper must match the selected category and one interest phrase.</p></div>
+    <label for="queries">Topics or questions</label><textarea id="queries" rows="4" placeholder="multi-agent systems&#10;mechanistic interpretability"></textarea>
+    <details class="category-picker"><summary><span id="category-summary">All research</span><span>Choose categories ↓</span></summary><div id="category-options" class="category-options"></div></details>
+    <label class="check"><input id="english-only" type="checkbox"> English-language papers only</label>
+  </section>
+  <section><div class="section-head"><h2>Acceptance bars</h2><p>Both bars apply. Prominent-source markers bypass authorship only.</p></div>
+    <div class="ranges"><label for="novelty-selectivity">Novelty <output id="novelty-selectivity-value">70</output></label><input id="novelty-selectivity" type="range" min="1" max="100"><p id="novelty-guide" class="hint"></p>
+    <label for="authorship-selectivity">Authorship <output id="authorship-selectivity-value">70</output></label><input id="authorship-selectivity" type="range" min="1" max="100"><p id="authorship-guide" class="hint"></p></div>
+    <div class="scale"><span>1 · nearly all</span><span>40 · top 50%</span><span>60 · top 20%</span><span>80 · top 5%</span><span>100 · extreme</span></div>
+  </section>
+  <section><div class="section-head"><h2>Feed & updates</h2></div><div class="grid">
+    <label>Default range<select id="default-window"><option value="day">Past day</option><option value="3d">Past 3 days</option><option value="week">Past week</option><option value="2w">Past 2 weeks</option><option value="month">Past month</option><option value="3m">Past 3 months</option><option value="6m">Past 6 months</option><option value="year">Past year</option></select></label>
+    <label>Default ranking<select id="default-sort"><option value="balanced">Best signal</option><option value="novelty">Novelty</option><option value="researcher">Authorship</option><option value="newest">Newest</option></select></label>
+    <label>Refresh<select id="refresh-hours"><option value="3">Every 3 hours</option><option value="6">Every 6 hours</option><option value="12">Every 12 hours</option><option value="24">Daily</option></select></label></div>
+    <label class="check"><input id="show-arxiv-badges" type="checkbox"> Highlight matching papers on research sites</label><label class="check"><input id="notifications-enabled" type="checkbox"> Notify me when a new paper clears both bars</label>
+  </section>
+  <section><div class="section-head"><h2>OpenAlex & local index</h2><p>Your personal key stays in this Chrome profile.</p></div>
+    <label for="api-key">OpenAlex API key</label><div class="key-row"><input id="api-key" type="password" autocomplete="off" placeholder="Personal API key"><a href="https://openalex.org/settings/api" target="_blank" rel="noreferrer">Get a free key ↗</a></div>
+    <div class="usage"><div><b id="usage-cost">$0.000</b><span> of $1 free daily allowance used here</span></div><div class="usage-track"><i id="usage-bar"></i></div><small id="usage-detail">No calls recorded today.</small></div>
+    <button id="rebuild-index" class="secondary" type="button">Rebuild rolling 1-year index</button>
+  </section>
+  <section><div class="section-head"><h2>Recent configurations</h2><p>Restore prior filters without rescanning an unchanged scope.</p></div><div id="search-history" class="history"><p class="hint">No saved configurations yet.</p></div></section>
+  <footer class="actions"><span id="save-status" role="status"></span><button type="submit">Save settings</button></footer>
+</form>
+<section class="data"><div><h2>Local research database</h2><p>Papers, authors, configurations and request estimates remain in extension storage.</p></div><button id="clear-data" class="secondary" type="button">Clear database</button></section>
+<footer class="legal">Open-source software developed with assistance from OpenAI Codex; not affiliated with or endorsed by OpenAI. Scores and prominence markers are discovery heuristics, not peer review or scientific endorsement.</footer>
+</main><script type="module" src="options.js"></script></body></html>

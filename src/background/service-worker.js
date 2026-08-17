@@ -18,11 +18,15 @@ import {
 } from "../shared/db.js";
 import {
   matchesResearchFilters,
+  discoveryScopeSignature,
+  interestMatchEvidence,
   researchFilterSignature,
   selectionFromSettings,
 } from "../shared/filters.js";
 import { OpenAlexClient, cleanWorkForDisplay } from "../shared/openalex.js";
 import { applySelectivity } from "../shared/ranking.js";
+import { groupDuplicatePapers } from "../shared/papers.js";
+import { annotateProminence } from "../shared/prominence.js";
 import { SCORING_VERSION, scoreBatch } from "../shared/scoring.js";
 
 const FALLBACK_TAXONOMY = Object.freeze([
@@ -48,6 +52,8 @@ const FALLBACK_TAXONOMY = Object.freeze([
 
 let refreshPromise = null;
 let pendingRefreshReason = null;
+let usageAccumulator = null;
+let usageFlushTimer = null;
 
 function isoDate(date = new Date()) {
   return date.toISOString().slice(0, 10);
@@ -68,6 +74,26 @@ function yearsAgo(years, fromIso) {
 function deduplicate(works) {
   return [...new Map(works.map((work) => [work.id, work])).values()];
 }
+
+async function recordApiUsage(event) {
+  const date = isoDate();
+  const current = usageAccumulator || (await getMetadata("apiUsageDaily")) || {};
+  const base = current.date === date ? current : { date, requests: 0, costUsd: 0 };
+  usageAccumulator = {
+    ...base, requests: base.requests + 1, costUsd: base.costUsd + Number(event.costUsd || 0),
+    hasEstimatedCalls: Boolean(base.hasEstimatedCalls || event.estimated),
+    providerRemaining: Number.isFinite(event.remaining) ? event.remaining : base.providerRemaining,
+    providerLimit: Number.isFinite(event.limit) ? event.limit : base.providerLimit,
+    resetAt: Number.isFinite(event.resetSeconds) ? new Date(Date.now() + event.resetSeconds * 1000).toISOString() : base.resetAt,
+    updatedAt: new Date().toISOString(),
+  };
+  clearTimeout(usageFlushTimer);
+  usageFlushTimer = setTimeout(() => {
+    setMetadata("apiUsageDaily", usageAccumulator).catch(console.error);
+  }, 500);
+}
+
+function openAlexClient(options) { return new OpenAlexClient({ ...options, onUsage: recordApiUsage }); }
 
 function deduplicateAuthors(authors) {
   return [...new Map(authors.map((author) => [author.id, author])).values()];
@@ -118,7 +144,7 @@ async function getTaxonomy({ force = false } = {}) {
   if (!force && fresh && cached?.fields?.length) return cached.fields;
   try {
     const settings = await loadSettings();
-    const client = new OpenAlexClient({
+    const client = openAlexClient({
       apiKey: settings.apiKey,
       maxEstimatedCostUsd: 0.005,
     });
@@ -222,7 +248,7 @@ async function fetchDiscovery(client, settings, taxonomy, since, until, mode, wr
     pages += result.pages;
     truncated ||= result.truncated;
   }
-  const retrieved = deduplicate(allWorks);
+  const retrieved = groupDuplicatePapers(deduplicate(allWorks));
   const matched = retrieved.filter((work) => matchesResearchFilters(work, settings));
   return {
     works: matched,
@@ -236,7 +262,7 @@ async function fetchDiscovery(client, settings, taxonomy, since, until, mode, wr
 }
 
 async function maybeFetchBaseline(client, settings, taxonomy, candidateSince, writeProgress) {
-  const signature = `${researchFilterSignature(settings)}:${SCORING_VERSION}`;
+  const signature = `${discoveryScopeSignature(settings)}:${SCORING_VERSION}`;
   const previousSignature = await getMetadata("baselineSignature");
   if (previousSignature !== signature) await deleteBaselineWorks();
 
@@ -310,7 +336,7 @@ function safePaperUrl(work) {
 }
 
 async function qualifiedMonth(settings, allWorks = null) {
-  const relevant = (allWorks || (await getAll("works"))).filter(
+  const relevant = groupDuplicatePapers(allWorks || (await getAll("works"))).map(annotateProminence).filter(
     (work) =>
       !work.isBaseline &&
       work.scoringVersion &&
@@ -388,8 +414,10 @@ async function recordNewPaperNotifications(
 async function performRefresh(reason = "manual") {
   const settings = await loadSettings();
   const taxonomy = await getTaxonomy();
-  const signature = researchFilterSignature(settings);
-  const previousCoverage = await getMetadata("discoveryCoverage");
+  const signature = discoveryScopeSignature(settings);
+  const coverageByScope = (await getMetadata("coverageByScope")) || {};
+  const legacyCoverage = await getMetadata("discoveryCoverage");
+  const previousCoverage = coverageByScope[signature] || (legacyCoverage?.signature === signature ? legacyCoverage : null);
   const selection = selectionFromSettings(settings);
   const hasFocusedScope = selection.fieldIds.length || selection.subfieldIds.length;
   const fullScan =
@@ -402,12 +430,12 @@ async function performRefresh(reason = "manual") {
   const writeProgress = progressWriter(baseState);
   await writeProgress({ phase: "starting", fetched: 0, total: null, pages: 0 });
 
-  const client = new OpenAlexClient({
+  const client = openAlexClient({
     apiKey: settings.apiKey,
     maxEstimatedCostUsd: fullScan ? settings.fullScanBudgetUsd : settings.incrementalScanBudgetUsd,
   });
   const until = isoDate();
-  const since = fullScan || mode === "limited" ? daysAgo(30) : daysAgo(settings.incrementalLookbackDays);
+  const since = fullScan ? daysAgo(365) : mode === "limited" ? daysAgo(30) : daysAgo(settings.incrementalLookbackDays);
 
   try {
     const [previousLastRefresh, previouslyStoredWorks] = await Promise.all([
@@ -428,7 +456,7 @@ async function performRefresh(reason = "manual") {
     );
     const candidates = discovery.works.map((work) => ({ ...work, isBaseline: false }));
 
-    const baseline = await maybeFetchBaseline(client, settings, taxonomy, daysAgo(30), writeProgress);
+    const baseline = await maybeFetchBaseline(client, settings, taxonomy, daysAgo(365), writeProgress);
     if (baseline.length) await bulkPut("works", baseline);
 
     const existingAuthors = await getAll("authors");
@@ -471,12 +499,13 @@ async function performRefresh(reason = "manual") {
       previousLastRefresh,
       reason,
     );
-    await pruneCandidates(daysAgo(60));
+    await pruneCandidates(daysAgo(400));
 
     const completedAt = new Date().toISOString();
+    if (usageAccumulator) await setMetadata("apiUsageDaily", usageAccumulator);
     const coverage = fullScan
       ? {
-          signature,
+          signature, filterSignature: researchFilterSignature(settings),
           mode,
           available: discovery.total,
           retrieved: discovery.retrieved,
@@ -489,7 +518,7 @@ async function performRefresh(reason = "manual") {
           lastIncrementalAt: completedAt,
         }
       : {
-          ...(previousCoverage || {}),
+          ...(previousCoverage || {}), filterSignature: researchFilterSignature(settings),
           signature,
           mode,
           limitedAvailable: discovery.total,
@@ -514,10 +543,18 @@ async function performRefresh(reason = "manual") {
       keyPresent: Boolean(settings.apiKey),
       notificationsGenerated,
     };
+    const history = (await getMetadata("searchHistory")) || [];
+    const currentFilterSignature = researchFilterSignature(settings);
+    const historyEntry = { id: `${completedAt}:${Math.random().toString(36).slice(2)}`, filterSignature: currentFilterSignature, savedAt: completedAt,
+      settings: { queries: settings.queries, selectedFields: settings.selectedFields, selectedSubfields: settings.selectedSubfields, englishOnly: settings.englishOnly,
+        noveltySelectivity: settings.noveltySelectivity, authorshipSelectivity: settings.authorshipSelectivity, defaultWindow: settings.defaultWindow, defaultSort: settings.defaultSort },
+      resultCount: (await qualifiedMonth(settings)).works.length, mode };
     await Promise.all([
       setMetadata("lastRefresh", completedAt),
       setMetadata("refreshState", state),
       setMetadata("discoveryCoverage", coverage),
+      setMetadata("coverageByScope", { ...coverageByScope, [signature]: coverage }),
+      setMetadata("searchHistory", [historyEntry, ...history.filter((item) => item.filterSignature !== currentFilterSignature)].slice(0, 12)),
     ]);
     return state;
   } catch (error) {
@@ -561,7 +598,7 @@ async function getFeed({
   const settings = await loadSettings();
   const windowConfig = WINDOWS[window] || WINDOWS.week;
   const cutoff = daysAgo(windowConfig.days);
-  const relevant = (await getAll("works")).filter(
+  const relevant = groupDuplicatePapers(await getAll("works")).map(annotateProminence).filter(
     (work) =>
       !work.isBaseline &&
       work.scoringVersion &&
@@ -578,7 +615,10 @@ async function getFeed({
   selected.works.sort(sorters[sort] || sorters.balanced);
   const safeOffset = Math.max(0, Number(offset) || 0);
   const safeLimit = Math.min(250, Math.max(1, Number(limit) || 120));
-  const page = selected.works.slice(safeOffset, safeOffset + safeLimit);
+  const page = selected.works.slice(safeOffset, safeOffset + safeLimit).map((work) => ({
+    ...work,
+    interestMatch: interestMatchEvidence(work, settings.queries || []),
+  }));
   return {
     papers: page.map(cleanWorkForDisplay),
     resultCount: selected.works.length,
@@ -593,7 +633,7 @@ async function getFeed({
       cutoffs: selected.cutoffs,
       topFractions: selected.topFractions,
     },
-    coverage: (await getMetadata("discoveryCoverage")) || null,
+    coverage: ((await getMetadata("coverageByScope")) || {})[discoveryScopeSignature(settings)] || (await getMetadata("discoveryCoverage")) || null,
     stats: await databaseStats(),
   };
 }
@@ -663,7 +703,7 @@ async function scoreArxivPage({ title, arxivId }) {
   const existing = await getWorksByArxivIds([arxivId]);
   if (existing[arxivId]?.scoringVersion === SCORING_VERSION) return existing[arxivId];
   const settings = await loadSettings();
-  const client = new OpenAlexClient({
+  const client = openAlexClient({
     apiKey: settings.apiKey,
     maxEstimatedCostUsd: settings.incrementalScanBudgetUsd,
   });
@@ -705,6 +745,10 @@ async function handleMessage(message) {
       return databaseStats();
     case "GET_TAXONOMY":
       return getTaxonomy(message.payload || {});
+    case "GET_API_USAGE":
+      return (await getMetadata("apiUsageDaily")) || { date: isoDate(), requests: 0, costUsd: 0 };
+    case "GET_SEARCH_HISTORY":
+      return (await getMetadata("searchHistory")) || [];
     case "REFRESH":
       return refresh("manual");
     case "REBUILD":

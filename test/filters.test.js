@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  discoveryScopeSignature,
+  hasCategoryEvidence,
+  interestMatchEvidence,
   fieldIdsForCategories,
   matchesInterestQuery,
   matchesResearchFilters,
@@ -75,4 +78,20 @@ test("production OpenAlex URL IDs match bare hierarchical selections", () => {
     }),
     true,
   );
+});
+
+test("AI labels require actual AI evidence instead of trusting a provider category", () => {
+  const physics = { ...aiWork, title: "Further aspects of supersymmetric Virasoro minimal strings", abstract: "Quantum operators and conformal field theory.", subfieldId: "1702" };
+  assert.equal(hasCategoryEvidence(physics), false);
+  assert.equal(matchesResearchFilters(physics, { englishOnly: true, selectedSubfields: ["1702"], queries: [] }), false);
+});
+
+test("interest phrases match nearby title or abstract terms only", () => {
+  assert.equal(interestMatchEvidence({ title: "Mean-field games", abstract: "Trajectory optimization.", topicName: "Multi-agent system" }, ["multi-agent system"]), null);
+  assert.equal(interestMatchEvidence({ title: "Coordination", abstract: "We study scalable multi agent systems for planning." }, ["multi-agent system"])?.location, "abstract");
+});
+
+test("changing an interest does not invalidate the discovery scope cache", () => {
+  const base = { selectedSubfields: ["1702"], englishOnly: true };
+  assert.equal(discoveryScopeSignature({ ...base, queries: [] }), discoveryScopeSignature({ ...base, queries: ["agents"] }));
 });

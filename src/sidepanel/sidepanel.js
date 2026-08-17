@@ -3,7 +3,6 @@ import { DEFAULT_SETTINGS, WINDOWS } from "../shared/defaults.js";
 const state = {
   window: DEFAULT_SETTINGS.defaultWindow,
   sort: DEFAULT_SETTINGS.defaultSort,
-  includeAll: false,
   loading: false,
   papers: [],
   renderedCount: 0,
@@ -23,7 +22,6 @@ const elements = {
   summaryCopy: document.querySelector("#summary-copy"),
   status: document.querySelector("#status-line"),
   refresh: document.querySelector("#refresh-button"),
-  showAll: document.querySelector("#show-all-button"),
   sort: document.querySelector("#sort-select"),
   tabs: [...document.querySelectorAll("[data-window]")],
   template: document.querySelector("#paper-template"),
@@ -113,8 +111,22 @@ function renderPaper(work, index) {
   title.textContent = work.title;
   title.href = safeExternalUrl(work.url || work.doi, `https://openalex.org/${work.id}`);
   fragment.querySelector(".paper-authors").textContent = authorLine(work);
+  const badges = fragment.querySelector(".paper-badges");
+  for (const marker of work.prominence || []) {
+    const badge = document.createElement("span"); badge.className = "prominence-badge";
+    badge.style.setProperty("--badge-color", marker.color); badge.textContent = marker.label;
+    badge.title = "Curated prominent-source marker; automatically clears the authorship gate."; badges.append(badge);
+  }
   fragment.querySelector(".paper-why").textContent = whyLine(work);
-  fragment.querySelector(".paper-source").textContent = work.sourceName || work.workType || "Research paper";
+  const sources = fragment.querySelector(".paper-sources");
+  const sourceList = (work.sources?.length ? work.sources : [{ name: work.sourceName || work.workType || "Research paper", url: work.url || work.doi }]).slice(0, 3);
+  sourceList.forEach((source, sourceIndex) => {
+    if (sourceIndex) sources.append(document.createTextNode(" · "));
+    const link = document.createElement("a"); link.className = "source-link"; link.target = "_blank"; link.rel = "noreferrer";
+    link.href = safeExternalUrl(source.url, `https://openalex.org/${work.id}`); link.textContent = source.name || `Source ${sourceIndex + 1}`; sources.append(link);
+  });
+  const interest = fragment.querySelector(".paper-interest");
+  if (work.interestMatch) { interest.hidden = false; interest.textContent = `Matches “${work.interestMatch.query}” in ${work.interestMatch.location}: ${work.interestMatch.snippet}`; }
 
   for (const [className, score] of [
     [".score-novelty", work.noveltyScore],
@@ -181,8 +193,7 @@ function updateControls() {
     tab.setAttribute("aria-selected", String(active));
   }
   elements.sort.value = state.sort;
-  elements.showAll.textContent = state.includeAll ? "Apply threshold" : "Show screened";
-  elements.summaryCopy.textContent = state.includeAll ? "papers were screened" : "papers cleared your bar";
+  elements.summaryCopy.textContent = "papers cleared both bars";
 }
 
 function showNotice(message, tone = "info") {
@@ -202,7 +213,6 @@ async function loadFeed({ skeleton = true } = {}) {
     const result = await send("GET_FEED", {
       window: state.window,
       sort: state.sort,
-      includeAll: state.includeAll,
       offset: 0,
       limit: PAGE_SIZE,
     });
@@ -239,7 +249,7 @@ async function loadFeed({ skeleton = true } = {}) {
       );
     } else if (coverage?.fullCompletedAt) {
       showNotice(
-        `30-day index: ${compactNumber(coverage.retrieved)} of ${compactNumber(coverage.available)} papers retrieved (${Math.round(coverage.coveragePercent || 0)}% API coverage).`,
+        `Local index: ${compactNumber(coverage.retrieved)} of ${compactNumber(coverage.available)} papers retrieved (${Math.round(coverage.coveragePercent || 0)}% API coverage).`,
         "success",
       );
     } else if (!lastRefresh) {
@@ -271,7 +281,6 @@ async function loadMore() {
     const result = await send("GET_FEED", {
       window: state.window,
       sort: state.sort,
-      includeAll: state.includeAll,
       offset: state.papers.length,
       limit: PAGE_SIZE,
     });
@@ -315,10 +324,6 @@ for (const tab of elements.tabs) {
 }
 elements.sort.addEventListener("change", () => {
   state.sort = elements.sort.value;
-  loadFeed();
-});
-elements.showAll.addEventListener("click", () => {
-  state.includeAll = !state.includeAll;
   loadFeed();
 });
 elements.refresh.addEventListener("click", refresh);

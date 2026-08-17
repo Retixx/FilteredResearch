@@ -41,3 +41,15 @@ test("both novelty and authorship thresholds must be cleared", () => {
   assert.ok(!selected.works.some((work) => work.id === "novel-only"));
   assert.ok(!selected.works.some((work) => work.id === "author-only"));
 });
+
+test("the displayed slider value is also a strict floor", () => {
+  const candidates = [{ id: "below", noveltyScore: 90, researcherScore: 77 }, { id: "pass", noveltyScore: 90, researcherScore: 90 }];
+  const result = applySelectivity(candidates, { noveltySelectivity: 80, authorshipSelectivity: 80 });
+  assert.deepEqual(result.works.map((work) => work.id), ["pass"]);
+});
+
+test("prominent sources bypass authorship but never novelty", () => {
+  const candidates = [{ id: "prominent", noveltyScore: 95, researcherScore: 2, authorshipOverride: true }, { id: "not-novel", noveltyScore: 2, researcherScore: 99, authorshipOverride: true }];
+  const result = applySelectivity(candidates, { noveltySelectivity: 80, authorshipSelectivity: 100 });
+  assert.deepEqual(result.works.map((work) => work.id), ["prominent"]);
+});

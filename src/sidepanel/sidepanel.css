@@ -170,7 +170,7 @@ a:focus-visible {
 
 .window-tabs {
   display: grid;
-  grid-template-columns: repeat(5, minmax(38px, 1fr));
+  grid-template-columns: repeat(8, minmax(34px, 1fr));
 }
 
 .window-tabs button {
@@ -436,11 +436,17 @@ a:focus-visible {
   font-size: 9px;
 }
 
-.paper-source {
+.paper-sources {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.paper-badges { display: flex; flex-wrap: wrap; gap: 5px; margin: -6px 0 11px; }
+.prominence-badge { padding: 2px 6px; border: 1px solid var(--badge-color); border-radius: 7px 2px 7px 2px; color: var(--badge-color); font-size: 8px; letter-spacing: .05em; text-transform: uppercase; }
+.paper-interest { margin: -3px 0 10px; padding-left: 8px; border-left: 2px solid var(--opal); color: var(--muted); font-size: 9px; line-height: 1.45; }
+.source-link { color: inherit; text-decoration: none; }
+.source-link:hover { text-decoration: underline; }
 
 .evidence {
   margin-top: 12px;

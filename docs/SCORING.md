@@ -35,7 +35,7 @@ This is deliberately named **Authorship**, not “Researcher quality.” Bibliom
 
 ## Logarithmic selectivity
 
-Raw scores are not comparable enough across fields to serve directly as slider thresholds. v0.3 ranks the current filtered time-window corpus separately on novelty and authorship, calculates a score cutoff for the requested top fraction, then applies both cutoffs with AND.
+v0.4 ranks the filtered time-window corpus separately on novelty and authorship, calculates a cutoff for the requested top fraction, and also treats the displayed slider number as a raw-score floor. Both gates apply with AND. A curated prominent-organization/researcher marker may bypass authorship only; it never bypasses novelty, category, language, or interest relevance.
 
 The anchor mapping is:
 

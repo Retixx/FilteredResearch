@@ -4,7 +4,7 @@ This document is an engineering risk review, not legal advice or a legal certifi
 
 ## Release posture
 
-| Area | v0.3 control | Status |
+| Area | v0.4 control | Status |
 | --- | --- | --- |
 | Single purpose | Research discovery, ranking, alerts, and on-page marking are one coherent purpose. | Implemented |
 | Minimum permissions | No `tabs`, `history`, `cookies`, scripting, identity, or all-sites permission. Site access is a fixed research-domain list. | Tested |

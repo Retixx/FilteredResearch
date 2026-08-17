@@ -58,7 +58,10 @@ export function applySelectivity(works, settings = {}, { includeAll = false } = 
     : works.filter(
         (work) =>
           (work.noveltyScore || 0) >= noveltyCutoff &&
-          (work.researcherScore || 0) >= authorshipCutoff,
+          (Number(settings.noveltySelectivity || 1) <= 1 || (work.noveltyScore || 0) >= Number(settings.noveltySelectivity)) &&
+          (((work.researcherScore || 0) >= authorshipCutoff &&
+            (Number(settings.authorshipSelectivity || 1) <= 1 || (work.researcherScore || 0) >= Number(settings.authorshipSelectivity))) ||
+            work.authorshipOverride),
       );
   return {
     works: selected,

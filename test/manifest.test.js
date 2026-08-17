@@ -6,7 +6,7 @@ const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.me
 const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 
 test("release versions stay aligned", () => {
-  assert.equal(manifest.version, "0.3.0");
+  assert.equal(manifest.version, "0.4.0");
   assert.equal(manifest.version, packageJson.version);
 });
 
