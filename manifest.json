@@ -1,0 +1,52 @@
+{
+  "manifest_version": 3,
+  "name": "FilteredResearch",
+  "short_name": "FilteredResearch",
+  "version": "0.2.0",
+  "description": "Find recent research ranked by idea novelty and established-researcher authorship.",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "assets/icon-16.png",
+    "32": "assets/icon-32.png",
+    "48": "assets/icon-48.png",
+    "128": "assets/icon-128.png"
+  },
+  "permissions": [
+    "alarms",
+    "notifications",
+    "sidePanel",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.openalex.org/*"
+  ],
+  "background": {
+    "service_worker": "src/background/service-worker.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "Open FilteredResearch",
+    "default_icon": {
+      "16": "assets/icon-16.png",
+      "32": "assets/icon-32.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "src/sidepanel/sidepanel.html"
+  },
+  "options_page": "src/options/options.html",
+  "content_scripts": [
+    {
+      "matches": [
+        "https://arxiv.org/*"
+      ],
+      "js": [
+        "src/content/arxiv.js"
+      ],
+      "css": [
+        "src/content/arxiv.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,0 +1,66 @@
+name: Publish to Chrome Web Store
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "assets/**"
+      - "src/**"
+      - "manifest.json"
+      - "package.json"
+      - "scripts/package.mjs"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      CWS_CLIENT_ID: ${{ secrets.CWS_CLIENT_ID }}
+      CWS_CLIENT_SECRET: ${{ secrets.CWS_CLIENT_SECRET }}
+      CWS_REFRESH_TOKEN: ${{ secrets.CWS_REFRESH_TOKEN }}
+      CWS_PUBLISHER_ID: ${{ secrets.CWS_PUBLISHER_ID }}
+      CWS_EXTENSION_ID: ${{ secrets.CWS_EXTENSION_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm test
+      - run: npm run check
+      - run: npm run package
+      - name: Build Web Store package
+        run: cd dist/filteredresearch-extension && zip -r ../../FilteredResearch-web-store.zip .
+      - name: Explain missing Web Store configuration
+        if: env.CWS_EXTENSION_ID == ''
+        run: echo "Chrome Web Store secrets are not configured; package validation succeeded and publishing was skipped."
+      - name: Exchange OAuth refresh token
+        if: env.CWS_EXTENSION_ID != ''
+        run: |
+          response=$(curl --fail --silent --show-error https://oauth2.googleapis.com/token \
+            --data-urlencode client_id="$CWS_CLIENT_ID" \
+            --data-urlencode client_secret="$CWS_CLIENT_SECRET" \
+            --data-urlencode refresh_token="$CWS_REFRESH_TOKEN" \
+            --data-urlencode grant_type=refresh_token)
+          token=$(echo "$response" | jq -r .access_token)
+          test -n "$token" && test "$token" != "null"
+          echo "CWS_ACCESS_TOKEN=$token" >> "$GITHUB_ENV"
+      - name: Upload new package
+        if: env.CWS_EXTENSION_ID != ''
+        run: |
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $CWS_ACCESS_TOKEN" \
+            -X POST \
+            -T FilteredResearch-web-store.zip \
+            "https://chromewebstore.googleapis.com/upload/v2/publishers/$CWS_PUBLISHER_ID/items/$CWS_EXTENSION_ID:upload"
+      - name: Submit update for review and automatic publication
+        if: env.CWS_EXTENSION_ID != ''
+        run: |
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $CWS_ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -X POST \
+            -d '{"publishType":"DEFAULT_PUBLISH"}' \
+            "https://chromewebstore.googleapis.com/v2/publishers/$CWS_PUBLISHER_ID/items/$CWS_EXTENSION_ID:publish"

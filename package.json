@@ -1,0 +1,16 @@
+{
+  "name": "filteredresearch",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "A local-first Chrome extension for finding unusually novel research and papers by established researchers.",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "check": "node --check src/background/service-worker.js && node --check src/sidepanel/sidepanel.js && node --check src/options/options.js && node --check src/notifications/notifications.js && node --check src/content/arxiv.js",
+    "package": "node scripts/package.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "Apache-2.0"
+}

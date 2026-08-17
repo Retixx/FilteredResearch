@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FilteredResearch · New papers</title>
+    <link rel="stylesheet" href="notifications.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="wordmark"><span>FR</span> FilteredResearch</div>
+      <p>New-paper inbox / local to this Chrome profile</p>
+    </header>
+
+    <main>
+      <section class="intro">
+        <div>
+          <p class="eyebrow">Notifications</p>
+          <h1>Ideas that arrived while you were elsewhere.</h1>
+          <p>Only newly discovered papers that cleared your current filters and acceptance bar appear here.</p>
+        </div>
+        <div class="intro-actions">
+          <button id="screen-now" class="primary-button" type="button">Screen now</button>
+          <button id="clear-inbox" class="secondary-button" type="button">Clear inbox</button>
+        </div>
+      </section>
+
+      <section class="inbox-heading">
+        <div><strong id="paper-count">—</strong> saved signals</div>
+        <p id="status" role="status">Loading…</p>
+      </section>
+      <section id="inbox" class="inbox" aria-live="polite"></section>
+      <section id="empty" class="empty" hidden>
+        <div class="empty-mark" aria-hidden="true"></div>
+        <h2>No new papers yet.</h2>
+        <p>FilteredResearch screens at Chrome startup and on your selected interval.</p>
+      </section>
+    </main>
+
+    <template id="notification-template">
+      <article class="paper-card">
+        <div class="paper-index"></div>
+        <div class="paper-content">
+          <div class="paper-meta"><span class="new-marker">New</span><span class="paper-date"></span><span>·</span><span class="paper-topic"></span></div>
+          <a class="paper-title" target="_blank" rel="noreferrer"></a>
+          <div class="scores">
+            <span>Novelty <strong class="novelty"></strong></span>
+            <span>Researcher <strong class="researcher"></strong></span>
+          </div>
+        </div>
+      </article>
+    </template>
+
+    <script type="module" src="notifications.js"></script>
+  </body>
+</html>

@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FilteredResearch settings</title>
+    <link rel="stylesheet" href="options.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <div class="wordmark"><span>FR</span> FilteredResearch</div>
+      <p>Local screening configuration / v0.2</p>
+    </header>
+
+    <main>
+      <section class="intro">
+        <p class="eyebrow">Settings</p>
+        <h1>Define the edges of your research world.</h1>
+        <p>
+          Categories and interests now act as hard filters. Leave both empty for a rotating,
+          cross-disciplinary sample.
+        </p>
+      </section>
+
+      <form id="settings-form">
+        <section class="setting-section">
+          <div class="section-number">01</div>
+          <div class="section-copy">
+            <h2>Research interests</h2>
+            <p>One phrase per line, up to five. A paper must match at least one phrase.</p>
+          </div>
+          <div class="section-control wide">
+            <label for="queries">Topics or questions</label>
+            <textarea id="queries" rows="6" placeholder="energy storage without rare metals&#10;urban climate adaptation&#10;origin of multicellularity"></textarea>
+          </div>
+        </section>
+
+        <section class="setting-section">
+          <div class="section-number">02</div>
+          <div class="section-copy">
+            <h2>Research categories</h2>
+            <p>Choose one or more broad fields. When interests are also present, papers must match both.</p>
+          </div>
+          <div class="section-control category-control">
+            <details class="category-picker">
+              <summary>
+                <span id="category-summary">All research</span>
+                <span aria-hidden="true">Choose ↓</span>
+              </summary>
+              <div id="category-options" class="category-options"></div>
+            </details>
+            <label class="check-label">
+              <input id="english-only" type="checkbox" />
+              English-language papers only
+            </label>
+          </div>
+        </section>
+
+        <section class="setting-section">
+          <div class="section-number">03</div>
+          <div class="section-copy">
+            <h2>Acceptance bar</h2>
+            <p>A paper appears if it clears either threshold. Both scores remain visible.</p>
+          </div>
+          <div class="section-control range-grid">
+            <label for="min-novelty">Minimum novelty <output id="min-novelty-value">70</output></label>
+            <input id="min-novelty" type="range" min="0" max="100" step="1" />
+            <label for="min-researcher">Minimum researcher <output id="min-researcher-value">70</output></label>
+            <input id="min-researcher" type="range" min="0" max="100" step="1" />
+          </div>
+        </section>
+
+        <section class="setting-section">
+          <div class="section-number">04</div>
+          <div class="section-copy">
+            <h2>Feed behavior</h2>
+            <p>Choose the starting view and how frequently Chrome wakes the scanner.</p>
+          </div>
+          <div class="section-control split-grid">
+            <label>Default range
+              <select id="default-window">
+                <option value="day">Past day</option>
+                <option value="3d">Past 3 days</option>
+                <option value="week">Past week</option>
+                <option value="2w">Past 2 weeks</option>
+                <option value="month">Past month</option>
+              </select>
+            </label>
+            <label>Default ranking
+              <select id="default-sort">
+                <option value="balanced">Best signal</option>
+                <option value="novelty">Novelty</option>
+                <option value="researcher">Researcher</option>
+                <option value="newest">Newest</option>
+              </select>
+            </label>
+            <label>Refresh interval
+              <select id="refresh-hours">
+                <option value="3">Every 3 hours</option>
+                <option value="6">Every 6 hours</option>
+                <option value="12">Every 12 hours</option>
+                <option value="24">Daily</option>
+              </select>
+            </label>
+            <label class="check-label">
+              <input id="show-arxiv-badges" type="checkbox" />
+              Show score badges on arXiv
+            </label>
+            <label class="check-label">
+              <input id="notifications-enabled" type="checkbox" />
+              Notify me when a newly published paper clears my filters
+            </label>
+          </div>
+        </section>
+
+        <section class="setting-section">
+          <div class="section-number">05</div>
+          <div class="section-copy">
+            <h2>OpenAlex access</h2>
+            <p>Optional. A free key raises the API budget. It stays in this Chrome profile.</p>
+          </div>
+          <div class="section-control wide">
+            <label for="api-key">API key</label>
+            <input id="api-key" type="password" autocomplete="off" placeholder="Optional" />
+            <a href="https://openalex.org/settings/api" target="_blank" rel="noreferrer">Get a free OpenAlex key ↗</a>
+          </div>
+        </section>
+
+        <footer class="form-actions">
+          <div id="save-status" role="status"></div>
+          <button class="save-button" type="submit">Save settings</button>
+        </footer>
+      </form>
+
+      <section class="data-section">
+        <div>
+          <p class="eyebrow">Local data</p>
+          <h2>Nothing is sent to a FilteredResearch server.</h2>
+          <p>Papers and author metrics live in Chrome's extension storage. Removing the extension removes them.</p>
+        </div>
+        <button id="clear-data" type="button">Clear research database</button>
+      </section>
+    </main>
+
+    <script type="module" src="options.js"></script>
+  </body>
+</html>

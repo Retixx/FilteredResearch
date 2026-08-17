@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>FilteredResearch</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark" aria-hidden="true">FR</span>
+        <div>
+          <h1>FilteredResearch</h1>
+          <p id="status-line">Local research signal</p>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button id="notifications-button" class="icon-button inbox-button" type="button" title="New paper inbox">
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M4.5 14.5h11l-1.2-1.8V8.6a4.3 4.3 0 0 0-8.6 0v4.1zM8.2 16.2c.3.8.9 1.2 1.8 1.2s1.5-.4 1.8-1.2" />
+          </svg>
+          <span id="notification-badge" class="notification-badge" hidden></span>
+          <span class="sr-only">New paper inbox</span>
+        </button>
+        <button id="refresh-button" class="icon-button" type="button" title="Refresh research">
+          <span aria-hidden="true">↻</span><span class="sr-only">Refresh</span>
+        </button>
+        <button id="settings-button" class="icon-button" type="button" title="Settings">
+          <span aria-hidden="true">•••</span><span class="sr-only">Settings</span>
+        </button>
+      </div>
+    </header>
+
+    <main>
+      <section class="controls" aria-label="Feed controls">
+        <div id="window-tabs" class="window-tabs" role="tablist" aria-label="Research age">
+          <button data-window="day" role="tab">1D</button>
+          <button data-window="3d" role="tab">3D</button>
+          <button data-window="week" role="tab">1W</button>
+          <button data-window="2w" role="tab">2W</button>
+          <button data-window="month" role="tab">1M</button>
+        </div>
+        <label class="sort-control">
+          <span>Rank</span>
+          <select id="sort-select">
+            <option value="balanced">Best signal</option>
+            <option value="novelty">Novelty</option>
+            <option value="researcher">Researcher</option>
+            <option value="newest">Newest</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="summary" aria-live="polite">
+        <div>
+          <span id="result-count" class="summary-count">—</span>
+          <span id="summary-copy">papers cleared your bar</span>
+          <span id="shown-copy" class="shown-copy"></span>
+        </div>
+        <button id="show-all-button" class="text-button" type="button">Show screened</button>
+      </section>
+
+      <section id="notice" class="notice" hidden></section>
+      <section id="feed" class="feed" aria-live="polite" aria-busy="true"></section>
+      <button id="load-more-button" class="load-more-button" type="button" hidden></button>
+
+      <section id="empty-state" class="empty-state" hidden>
+        <div class="empty-orbit" aria-hidden="true"><span></span></div>
+        <h2>No papers cleared the bar yet</h2>
+        <p>Add interests for a sharper scan, or refresh to screen a new sample.</p>
+        <div class="empty-actions">
+          <button id="empty-refresh" class="primary-button" type="button">Screen research</button>
+          <button id="empty-settings" class="secondary-button" type="button">Add interests</button>
+        </div>
+      </section>
+    </main>
+
+    <template id="paper-template">
+      <article class="paper-card">
+        <div class="paper-rank"></div>
+        <div class="paper-content">
+          <div class="paper-meta">
+            <span class="paper-date"></span>
+            <span aria-hidden="true">·</span>
+            <span class="paper-topic"></span>
+          </div>
+          <a class="paper-title" target="_blank" rel="noreferrer"></a>
+          <p class="paper-authors"></p>
+          <div class="scores">
+            <div class="score score-novelty">
+              <div class="score-label"><span>Novelty</span><strong></strong></div>
+              <div class="score-track"><span></span></div>
+            </div>
+            <div class="score score-researcher">
+              <div class="score-label"><span>Researcher</span><strong></strong></div>
+              <div class="score-track"><span></span></div>
+            </div>
+          </div>
+          <p class="paper-why"></p>
+          <div class="paper-footer">
+            <span class="paper-source"></span>
+            <button class="details-button" type="button">Evidence</button>
+          </div>
+          <div class="evidence" hidden></div>
+        </div>
+      </article>
+    </template>
+
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>
