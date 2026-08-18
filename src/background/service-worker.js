@@ -441,14 +441,24 @@ async function filteredCorpus(settings, { lastRefresh = null } = {}) {
   const cacheKey = `${stamp || "none"}:${researchFilterSignature(settings)}`;
   if (feedCorpusCache?.key !== cacheKey) {
     const roster = await getProminenceRoster();
-    feedCorpusCache = {
-      key: cacheKey,
-      works: groupDuplicatePapers(await getAll("works"))
-        .map((work) => annotateProminence(work, roster))
-        .filter(
-          (work) => !work.isBaseline && work.scoringVersion && matchesResearchFilters(work, settings),
-        ),
-    };
+    const stored = (await getAll("works")).filter((work) => work && typeof work === "object");
+    // One unreadable record must not abort the whole render, so each is grouped
+    // and screened defensively and simply dropped if it cannot be processed.
+    let skipped = 0;
+    const works = [];
+    for (const work of groupDuplicatePapers(stored)) {
+      try {
+        const annotated = annotateProminence(work, roster);
+        if (!annotated.isBaseline && annotated.scoringVersion && matchesResearchFilters(annotated, settings)) {
+          works.push(annotated);
+        }
+      } catch (error) {
+        skipped += 1;
+        if (skipped <= 3) console.warn("Skipped an unreadable stored paper", work?.id, error);
+      }
+    }
+    if (skipped) console.warn(`Skipped ${skipped} unreadable stored papers while building the feed`);
+    feedCorpusCache = { key: cacheKey, works };
   }
   return feedCorpusCache.works;
 }

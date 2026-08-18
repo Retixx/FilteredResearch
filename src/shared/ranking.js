@@ -43,6 +43,8 @@ function cutoffForTopFraction(values, fraction) {
 }
 
 export function applySelectivity(works, settings = {}, { includeAll = false } = {}) {
+  works = (Array.isArray(works) ? works : []).filter((w) => w && typeof w === "object");
+  if (!settings || typeof settings !== "object") settings = {};
   const noveltyFraction = selectivityToTopFraction(settings.noveltySelectivity);
   const authorshipFraction = selectivityToTopFraction(settings.authorshipSelectivity);
   const noveltyCutoff = cutoffForTopFraction(

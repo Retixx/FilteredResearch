@@ -1,13 +1,19 @@
 # FilteredResearch
 
-FilteredResearch v0.7.1 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
+FilteredResearch v0.7.2 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
 
 - **Novelty**: lexical distance from up to 320 older, field-adjacent OpenAlex papers, adjusted for evidence completeness, rare title phrases, cross-field combinations, and incremental wording.
 - **Authorship**: an established-track-record signal using author h-index, citations, recent citedness, works count, ORCID presence, and authorship role.
 
 Neither score proves scientific novelty, quality, correctness, reputation, or significance. They are screening heuristics for deciding what to inspect next.
 
-## What changed in v0.7.1
+## What changed in v0.7.2
+
+- Searching "RAG" now finds retrieval-augmented generation papers. Interest matching was a substring test, so short queries matched inside unrelated words, and an abbreviation could not find its own expansion. Matching is whole-token, and a glossary resolves common research abbreviations both ways.
+- Novelty separates consolidation work from new work. Standing was a z-score whose scale collapsed on a uniform corpus, pinning every interesting paper to the same value; it is now a rank within the field, with a second signal for vocabulary the field does not already use, and an explicit penalty for surveys, benchmarks and empirical studies.
+- The extension icon renders. One PNG was written with a corrupt CRC, so Chrome fell back to a grey placeholder; icons are now generated and CRC-verified locally.
+
+## Earlier, in v0.7.1
 
 - Fixed the "message channel closed before a response was received" error during a discovery pass. A pass outlives the service worker's guaranteed lifetime, so it is now started without holding the channel open and watched through persisted progress state, with live phase and counts shown while it runs.
 - The icon is now a book: front cover with the FR monogram, page block and back cover behind it, and a spine fold.

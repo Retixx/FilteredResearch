@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "FilteredResearch",
   "short_name": "FilteredResearch",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "Build a local, field-filtered research index ranked by novelty and authorship signals.",
   "minimum_chrome_version": "116",
   "icons": {

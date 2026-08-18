@@ -39,6 +39,7 @@ export function legacySelection(categoryIds) {
 }
 
 export function selectionFromSettings(settings = {}) {
+  if (!settings || typeof settings !== "object") settings = {};
   const fieldIds = normalizeFieldIds(settings.selectedFields), subfieldIds = normalizeSubfieldIds(settings.selectedSubfields);
   return fieldIds.length || subfieldIds.length ? { fieldIds, subfieldIds } : legacySelection(settings.selectedCategories);
 }
@@ -60,15 +61,152 @@ function editDistanceWithin(left, right, maximum) {
 }
 function tokenMatches(queryToken, documentToken) {
   if (queryToken === documentToken) return true;
+  // "rag" should match "rag-based" but never the inside of "storage".
+  if (documentToken.includes("-") && documentToken.split("-").includes(queryToken)) return true;
   if (queryToken.length < 6 || queryToken[0] !== documentToken[0]) return false;
   return editDistanceWithin(queryToken, documentToken, queryToken.length >= 10 ? 2 : 1);
 }
+
+// Whole-token phrase match. A raw substring test made every short query match
+// any word containing it: "RAG" matched storage, average, fragment, paragraph
+// and diaphragm, and "AI" matched chain and plain.
+function containsPhrase(documentTokens, queryTokens) {
+  if (!queryTokens.length) return true;
+  for (let start = 0; start + queryTokens.length <= documentTokens.length; start += 1) {
+    let matched = true;
+    for (let offset = 0; offset < queryTokens.length; offset += 1) {
+      if (!tokenMatches(queryTokens[offset], documentTokens[start + offset])) {
+        matched = false;
+        break;
+      }
+    }
+    if (matched) return true;
+  }
+  return false;
+}
+// An acronym and its expansion are the same subject. Searching "RAG" must find
+// papers that only ever write "retrieval-augmented generation", and searching
+// the full phrase must find papers that only use the acronym; otherwise a
+// perfectly relevant literature is invisible to the query.
+const STOP_INITIALS = new Set(["of", "the", "and", "for", "a", "an", "in", "on", "to", "with"]);
+
+// Abbreviations researchers actually type. A known acronym resolves to its
+// established meaning rather than to any phrase whose initials happen to line
+// up, so "RAG" finds retrieval-augmented generation and not "robust adaptive
+// gradient". Unknown abbreviations still fall back to initial matching.
+const ACRONYM_GLOSSARY = Object.freeze({
+  rag: ["retrieval augmented generation", "retrieval augmented generative"],
+  llm: ["large language model", "large language models"],
+  llms: ["large language models"],
+  nlp: ["natural language processing"],
+  cv: ["computer vision"],
+  rl: ["reinforcement learning"],
+  rlhf: ["reinforcement learning from human feedback"],
+  gan: ["generative adversarial network", "generative adversarial networks"],
+  cnn: ["convolutional neural network", "convolutional neural networks"],
+  rnn: ["recurrent neural network", "recurrent neural networks"],
+  gnn: ["graph neural network", "graph neural networks"],
+  vlm: ["vision language model", "vision language models"],
+  moe: ["mixture of experts"],
+  sae: ["sparse autoencoder", "sparse autoencoders"],
+  peft: ["parameter efficient fine tuning"],
+  lora: ["low rank adaptation"],
+  sft: ["supervised fine tuning"],
+  dpo: ["direct preference optimization"],
+  mcts: ["monte carlo tree search"],
+  ssl: ["self supervised learning"],
+  ood: ["out of distribution"],
+  qa: ["question answering"],
+  asr: ["automatic speech recognition"],
+  tts: ["text to speech"],
+  ocr: ["optical character recognition"],
+  slam: ["simultaneous localization and mapping"],
+  mpc: ["model predictive control"],
+  pde: ["partial differential equation", "partial differential equations"],
+  dft: ["density functional theory"],
+  mri: ["magnetic resonance imaging"],
+  ai: ["artificial intelligence"],
+  agi: ["artificial general intelligence"],
+  hci: ["human computer interaction"],
+  iot: ["internet of things"],
+  api: ["application programming interface"],
+});
+
+function isAcronymCandidate(token) {
+  return /^[a-z]{2,6}$/.test(token);
+}
+
+function glossaryExpansions(token) {
+  const known = ACRONYM_GLOSSARY[token];
+  return known ? known.map((phrase) => phrase.split(" ")) : null;
+}
+
+// The acronym a known expansion belongs to, so the full phrase also finds
+// papers that only ever print the abbreviation.
+function glossaryAcronymFor(queryTokens) {
+  const phrase = queryTokens.join(" ");
+  for (const [acronym, expansions] of Object.entries(ACRONYM_GLOSSARY)) {
+    if (expansions.includes(phrase)) return acronym;
+  }
+  return "";
+}
+
+function expansionMatches(documentTokens, acronym) {
+  const letters = acronym.split("");
+  for (let start = 0; start + letters.length <= documentTokens.length; start += 1) {
+    let offset = 0;
+    let index = start;
+    while (index < documentTokens.length && offset < letters.length) {
+      const token = documentTokens[index];
+      // Small joining words inside an expansion are skipped, but only between
+      // matched initials, never at the start.
+      if (offset > 0 && STOP_INITIALS.has(token)) {
+        index += 1;
+        continue;
+      }
+      const parts = token.includes("-") ? token.split("-") : [token];
+      let consumed = false;
+      for (const part of parts) {
+        if (offset < letters.length && part.startsWith(letters[offset])) {
+          offset += 1;
+          consumed = true;
+        }
+      }
+      if (!consumed) break;
+      index += 1;
+    }
+    if (offset === letters.length) return true;
+  }
+  return false;
+}
+
+function acronymOf(tokens) {
+  const initials = tokens.filter((token) => !STOP_INITIALS.has(token)).map((token) => token[0]);
+  return initials.length >= 2 ? initials.join("") : "";
+}
+
 function matchWindow(text, query) {
   const documentTokens = normalizeSearchText(text).split(" ").filter(Boolean);
   const queryTokens = normalizeSearchText(query).split(" ").filter(Boolean);
   if (!queryTokens.length) return true;
-  const normalizedText = documentTokens.join(" "), normalizedQuery = queryTokens.join(" ");
-  if (normalizedText.includes(normalizedQuery)) return true;
+  if (containsPhrase(documentTokens, queryTokens)) return true;
+  if (queryTokens.length === 1 && isAcronymCandidate(queryTokens[0])) {
+    const known = glossaryExpansions(queryTokens[0]);
+    if (known) {
+      // A recognised abbreviation means exactly what it is known to mean.
+      if (known.some((expansion) => containsPhrase(documentTokens, expansion))) return true;
+    } else if (expansionMatches(documentTokens, queryTokens[0])) {
+      // Unrecognised abbreviation: fall back to matching its initials.
+      return true;
+    }
+  }
+  // A full phrase must also find papers that only ever print the abbreviation.
+  if (queryTokens.length > 1) {
+    const known = glossaryAcronymFor(queryTokens);
+    if (known && documentTokens.includes(known)) return true;
+    const derived = acronymOf(queryTokens);
+    if (derived && documentTokens.includes(derived)) return true;
+  }
   const meaningful = queryTokens.filter((token) => !STOP_WORDS.has(token));
   const required = meaningful.length ? meaningful : queryTokens;
   const width = Math.max(required.length + 5, 8);
@@ -87,8 +225,12 @@ function snippet(value, query) {
   return `${start ? "…" : ""}${text.slice(start, end).trim()}${end < text.length ? "…" : ""}`;
 }
 
+// Records come from storage and from a remote API, so a single malformed one
+// must not throw out of a filter and take down an entire feed render.
 export function interestMatchEvidence(work, queries = []) {
-  for (const query of queries.map(String).map((item) => item.trim()).filter(Boolean)) {
+  if (!work || typeof work !== "object") return null;
+  const list = Array.isArray(queries) ? queries : [queries];
+  for (const query of list.filter((item) => item != null).map(String).map((item) => item.trim()).filter(Boolean)) {
     if (matchWindow(work.title, query)) return { query, location: "title", snippet: snippet(work.title, query) };
     if (matchWindow(work.abstract, query)) return { query, location: "abstract", snippet: snippet(work.abstract, query) };
     const labels = [work.topicName, work.subfieldName, work.fieldName, ...(work.topics || []).map((topic) => topic.topicName)]
@@ -100,11 +242,14 @@ export function interestMatchEvidence(work, queries = []) {
 }
 export function matchesInterestQuery(work, query) { return Boolean(interestMatchEvidence(work, [query])); }
 export function hasCategoryEvidence(work) {
+  if (!work || typeof work !== "object") return false;
   if (taxonomyId(work.subfieldId) !== "1702") return true;
   const text = normalizeSearchText(`${work.title || ""} ${work.abstract || ""}`);
   return AI_EVIDENCE.some((pattern) => pattern.test(text));
 }
 export function matchesResearchFilters(work, settings = {}) {
+  if (!work || typeof work !== "object") return false;
+  if (!settings || typeof settings !== "object") settings = {};
   if (settings.englishOnly && work.language !== "en") return false;
   const selection = selectionFromSettings(settings);
   const arxivCategories = Array.isArray(work.arxivCategories) ? work.arxivCategories : [];
@@ -126,9 +271,11 @@ export function matchesResearchFilters(work, settings = {}) {
   return Boolean(interestMatchEvidence(work, queries));
 }
 export function discoveryScopeSignature(settings = {}) {
+  if (!settings || typeof settings !== "object") settings = {};
   const selection = selectionFromSettings(settings);
   return JSON.stringify({ fields: [...selection.fieldIds].sort(), subfields: [...selection.subfieldIds].sort(), englishOnly: Boolean(settings.englishOnly) });
 }
 export function researchFilterSignature(settings = {}) {
+  if (!settings || typeof settings !== "object") settings = {};
   return JSON.stringify({ scope: JSON.parse(discoveryScopeSignature(settings)), arxivGroups: [...(settings.selectedArxivGroups || [])].sort(), arxivCategories: [...(settings.selectedArxivCategories || [])].sort(), queries: (settings.queries || []).map(normalizeSearchText).filter(Boolean).sort() });
 }
