@@ -1,6 +1,6 @@
 # Chrome Web Store listing
 
-Accurate for **v0.8.0**. The listing must match the manifest: since v0.8.0 the
+Accurate for **v1.0.0**. The listing must match the manifest: since v0.8.0 the
 extension declares no content script and reads no web page, so any wording about
 highlighting or on-page reading is not just outdated but a false disclosure.
 
@@ -102,7 +102,11 @@ install:
 - **Screenshots**, 1280×800 or 640×400, at least one, up to five. Worth showing:
   the side panel with results, the settings scope picker, the acceptance-bar
   sliders, and the new-paper inbox.
-- **Small promo tile**, 440×280, if you want placement in store surfaces.
+- **Small promo tile**, 440×280 — `assets/promo-small-440x280.jpg`, generated and ready.
+- **Marquee promo tile**, 1400×560 — `assets/promo-marquee-1400x560.jpg`. Only shown if Google editorially features the item, so it is optional at launch.
+
+The full description to paste is `docs/store-description.txt`. Chrome renders the
+description as plain text, so it deliberately contains no markdown.
 
 Avoid screenshots containing a real API key or personal data.
 

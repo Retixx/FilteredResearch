@@ -1,4 +1,4 @@
-# FilteredResearch v0.7.1 specification
+# FilteredResearch v1.0.0 specification
 
 ## Product contract
 
@@ -39,7 +39,7 @@ The primary user chooses an OpenAlex field/subfield and an index depth in the si
 
 ### Ranking
 
-- Score novelty against up to 320 older, subfield-adjacent references using the documented TF–IDF/cosine heuristic. Similarity is computed through a per-group term index rather than pairwise, which must produce identical scores.
+- Score novelty against up to 320 older, subfield-adjacent references using the documented TF-IDF/cosine heuristic. Similarity is computed through a per-group term index rather than exhaustive pairwise comparison, and must produce results identical to the pairwise method.
 - Express novelty relative to the field's own crowding rather than as an absolute distance. A paper's nearest-peer similarity and neighbourhood density are compared with the same statistic measured across the field, then mapped through a logistic curve so the score occupies the full 1-100 range instead of bunching near the top.
 - Fall back to a fixed calibration curve when a field has too few peers to describe a distribution.
 - Treat a change of scoring version as invalidating stored scores; a refresh rescores saved papers so one calibration applies across the feed.

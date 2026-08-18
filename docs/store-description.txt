@@ -1,0 +1,85 @@
+Most research tools show you what is new. FilteredResearch shows you what is actually different.
+
+Every field publishes far more than anyone can read, and the genuinely original work is buried under incremental papers, benchmark reruns and surveys that restate what is already known. FilteredResearch screens recent literature in a field you choose and ranks it on two signals you control, so the unusual work rises and the routine work sinks.
+
+It runs entirely in your browser. There is no account, no server, and no tracking.
+
+
+WHAT IT DOES
+
+Pick a field, subfield or arXiv category. Choose how far back to index: 1 day, 3 days, 1 week, 2 weeks, 1 month or 3 months. Press refresh, and the extension builds a local index of recent papers from OpenAlex, scores each one, and shows what clears your bar.
+
+The side panel keeps a tab for every date range, so you can move between the past day and the past three months instantly, without another network request.
+
+
+THE TWO SIGNALS
+
+NOVELTY asks how unusual a paper is inside its own field. Rather than measuring an absolute distance, it compares the paper against how crowded the field itself is: how close its nearest neighbours are, and how much vocabulary it introduces that the field does not already use. Papers that announce themselves as consolidations, such as surveys, benchmarks and comparative studies, are scored down explicitly.
+
+AUTHORSHIP uses public OpenAlex bibliometrics: h-index, total citations, recent citedness, publication count, ORCID presence and author position.
+
+Both bars apply together. Two sliders set how selective each one is, from "nearly everything" to the top fraction of a percent. Every paper shows its scores, the nearest prior work it was compared against, and how many peers were used, so you can see why something surfaced instead of trusting a number.
+
+
+WHY RECENT ACTUALLY MEANS RECENT
+
+Bibliographic databases record the date a journal published a paper, not the date the work appeared. A preprint posted in 2025 and picked up by a journal last week is listed as brand new research, which is misleading when you are hunting for what just came out.
+
+FilteredResearch reads the original posting date where one exists and ranks on that instead, then tells you when a paper was republished later. Work that has been available for a year no longer masquerades as this week's discovery.
+
+
+SCOPE THAT MATCHES HOW YOU THINK
+
+Categories use arXiv's official taxonomy alongside OpenAlex fields, so you can select a whole discipline or individual subfields.
+
+Interest phrases steer ranking rather than acting as a keyword wall. Type "RAG" and the extension understands retrieval-augmented generation, including papers that only ever write the phrase out in full, and papers that only ever use the abbreviation. Common research abbreviations are recognised in both directions. If you would rather have a strict keyword filter, one setting turns interests back into a hard requirement.
+
+Duplicate records from different journals and repositories are merged into a single paper with separate source links, so the same work does not fill your feed three times.
+
+
+OPTIONAL AUTOMATIC SCANNING
+
+If you want it, the extension can check for new research on its own every 3 hours, 6 hours, 24 hours or 3 days. A scan runs when Chrome starts if the interval has passed, and periodically while Chrome stays open.
+
+Papers that clear both bars collect in a local inbox, and the toolbar icon shows an unread count. Automatic scanning is off by default, because a scan uses your own OpenAlex allowance and that should be your decision.
+
+
+PRIVACY
+
+FilteredResearch reads no web page. It declares no content script, so it cannot see the sites you visit, and nothing ever appears over the pages you are browsing.
+
+There is no FilteredResearch server. No account, no sign-in, no advertising, no analytics, no telemetry. Your settings, your API key and your entire paper index stay in Chrome's extension storage on your own machine.
+
+The extension talks to exactly two places: the OpenAlex API for scholarly metadata, and arXiv's public category taxonomy page so category names stay accurate. Nothing is transmitted to the developer, ever.
+
+The full privacy policy is linked below and the source is public, so these claims are checkable rather than promises.
+
+
+NO API KEY REQUIRED
+
+The extension works immediately with no signup. A keyless pass samples recent work in your field and scores it exactly the same way.
+
+A free OpenAlex key, which takes about a minute to obtain, removes the sampling limit so a pass covers every paper in your scope rather than a sample. The key is entirely optional, it is free, no payment details are involved, and it never leaves your browser. There is no bundled developer key, so your usage is always your own.
+
+
+WHAT THIS IS NOT
+
+The scores are screening heuristics for deciding what to read next. They are not peer review, not verified originality, not a measure of quality, correctness or scientific importance, and not a judgement about any researcher.
+
+Novelty is measured on the language of titles and abstracts. A genuinely new idea described in conventional terms may score lower than it deserves, and unusual phrasing can score higher than it deserves. Author metrics reward established careers and will under-rate early-career researchers doing excellent work.
+
+Metadata can be incomplete or wrong. Author disambiguation, language labelling and subject classification all carry errors that the extension inherits from its source.
+
+Use it to shorten a reading list, not to decide what matters.
+
+
+OPEN SOURCE
+
+FilteredResearch is released under the Apache-2.0 licence and the full source is public. The scoring method is documented, the limitations are written down, and the behaviour is covered by an automated test suite.
+
+
+DATA SOURCE
+
+Scholarly metadata comes from OpenAlex, released under CC0, and arXiv's public category taxonomy.
+
+FilteredResearch is independent. It is not affiliated with, endorsed by, or sponsored by OpenAlex, arXiv, or OpenAI. Developed with assistance from OpenAI Codex.

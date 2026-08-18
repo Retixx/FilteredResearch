@@ -148,6 +148,16 @@ Release readiness pass over the whole extension.
 - Verified that optimisation changes nothing: crowding and nearest-peer similarity agree with a naive pairwise implementation to within 8.3e-17, and a test now fails if the two ever diverge.
 - Audited what leaves the machine. The extension makes exactly two kinds of outbound request, to the OpenAlex API and to arXiv's public taxonomy page, both matching declared host permissions. There is no beacon, no XHR, no WebSocket, no cookie or localStorage use, and no analytics. Only a fixed contact address and, when the user has supplied one, their own key are attached.
 
+## v1.0.0 — Launch
+
+First public release. No behavioural changes beyond the fixes below; this version marks the point at which the extension was considered ready to publish.
+
+- Fixed a stale count label. `updateControls` ran before the render assigned the new result count, so the summary was always one render behind and read "1 papers cleared both bars". The label now follows the count actually rendered.
+- Fixed the date tabs overflowing a narrow side panel. Six fixed-width tabs did not fit, which produced a scrollbar under the row and clipped the last tab; they now share the available width.
+- Made scoring roughly twice as fast. Crowding compared every candidate against every peer, which on a full rescore of a three-month index meant close to two million cosine computations, nearly all between papers sharing no vocabulary. Peers are now indexed by term once per group, so a candidate touches only peers that share a term with it: a 6,000 paper rescore went from about 16.6 to 8.9 seconds. A test asserts the indexed result matches a naive pairwise implementation to within floating-point tolerance, since an optimisation that changes scores is a bug.
+- Audited what leaves the machine: two network call sites, both matching the declared hosts, and no beacon, XHR, WebSocket, cookie or local-storage use anywhere.
+- Added store assets and a plain-text listing description, and generated both promotional tiles at their exact required sizes.
+
 ## Current state
 
 The released build is **v1.0.0**. Automated tests at release: **90 passing**.
