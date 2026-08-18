@@ -12,16 +12,15 @@ test("release versions stay aligned", () => {
 test("manifest is MV3 and has only scoped host access", () => {
   assert.equal(manifest.manifest_version, 3);
   assert.equal(manifest.minimum_chrome_version, "116");
-  assert.deepEqual(manifest.host_permissions, ["https://api.openalex.org/*", "https://arxiv.org/*", "https://export.arxiv.org/*"]);
+  assert.deepEqual(manifest.host_permissions, ["https://api.openalex.org/*", "https://arxiv.org/*"]);
   assert.ok(manifest.permissions.includes("sidePanel"));
-  assert.ok(!manifest.permissions.includes("alarms"));
+  // Automatic scanning needs a wake-up source that survives worker shutdown.
+  assert.ok(manifest.permissions.includes("alarms"));
   assert.ok(!manifest.permissions.includes("notifications"));
   assert.deepEqual(manifest.optional_permissions, ["notifications"]);
   assert.ok(!manifest.permissions.includes("tabs"));
   assert.ok(!manifest.permissions.includes("history"));
-  const matches = manifest.content_scripts.flatMap((script) => script.matches);
-  assert.ok(!matches.includes("<all_urls>"));
-  assert.ok(!matches.includes("*://*/*"));
+  assert.ok(!manifest.content_scripts, "page highlighting was removed in v0.8.0");
 });
 
 test("manifest points to bundled local code", () => {

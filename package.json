@@ -1,12 +1,12 @@
 {
   "name": "filteredresearch",
-  "version": "0.7.2",
+  "version": "0.8.0",
   "private": true,
   "type": "module",
   "description": "A local-first Chrome extension for finding unusually novel research and papers by established researchers.",
   "scripts": {
     "test": "node --test test/*.test.js",
-    "check": "node --check src/background/service-worker.js && node --check src/sidepanel/sidepanel.js && node --check src/options/options.js && node --check src/notifications/notifications.js && node --check src/content/arxiv.js && node --check src/content/research-sites.js",
+    "check": "node --check src/background/service-worker.js && node --check src/sidepanel/sidepanel.js && node --check src/options/options.js && node --check src/notifications/notifications.js && node --check src/shared/refresh-progress.js",
     "package": "node scripts/package.mjs"
   },
   "engines": {

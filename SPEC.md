@@ -4,7 +4,7 @@
 
 FilteredResearch is an open-source, local-first Chrome extension for finding recent papers that are both lexically unusual within their field and associated with an established authorship track record. It is not a publisher crawler, paper archive, citation recommender, peer-review substitute, or AI research product.
 
-The primary user chooses an OpenAlex field/subfield and an index depth in the sidebar. Depth options are 1 day and 3 days (Light), 1 week and 2 weeks (Moderate), and 1 month and 3 months (Intensive). Three months is the ceiling: deeper passes retrieved far more works than the scoring stage could keep up with, which made discovery unusably slow. Preferences are local-only; discovery starts exclusively through an explicit user refresh.
+The primary user chooses an OpenAlex field/subfield and an index depth in the sidebar. Depth options are 1 day and 3 days (Light), 1 week and 2 weeks (Moderate), and 1 month and 3 months (Intensive). Three months is the ceiling: deeper passes retrieved far more works than the scoring stage could keep up with, which made discovery unusably slow. Preferences are local-only. Discovery starts through an explicit user refresh, or on the automatic interval the user chooses.
 
 ## Functional requirements
 
@@ -18,7 +18,7 @@ The primary user chooses an OpenAlex field/subfield and an index depth in the si
 - Require a user-owned OpenAlex key for exhaustive indexing. Never ship a shared key.
 - Without a key, label the result as a limited preview and retrieve no more than 500 works.
 - If no taxonomy field is selected, use a rotating cross-disciplinary preview rather than claiming exhaustive global coverage.
-- Install, startup, settings saves, and depth changes make no discovery requests. Group records by normalized title plus author identity even across different DOIs and preserve up to one year locally.
+- Install, settings saves, and depth changes make no discovery requests. Startup makes one only when automatic scanning is enabled and its interval has elapsed. Group records by normalized title plus author identity even across different DOIs and preserve up to one year locally.
 - A stored index depth beyond the supported ceiling migrates onto the nearest supported depth instead of being rejected.
 - Full discovery runs only after explicit user action and the prior saved feed remains available until completion.
 - A pass is started without holding a message channel open, because it runs longer than a Manifest V3 service worker is guaranteed to live. Callers watch the progress state the worker persists, which also keeps the worker alive; a dropped poll never aborts the watch, and a pass that stops advancing is reported rather than awaited forever.
@@ -62,19 +62,14 @@ The primary user chooses an OpenAlex field/subfield and an index depth in the si
 - Settings explain the selectivity anchors, own-key requirement, expected first-run cost/time, local page inspection, and scoring limitations.
 - Text normalization decodes entities, strips markup/control characters, applies NFKC, and repairs conservative lowercase-to-uppercase word joins.
 
-### Notifications and page highlighting
+### Notifications and automatic scanning
 
-- Native notifications are an optional Chrome permission requested only after the user enables them.
-- Notify only for newly indexed works that clear both current bars; keep a local inbox.
-- Supported page access is a named list of research publishers, repositories and indexes. No wildcard or all-URL access is ever requested, so ordinary browsing runs none of this code.
-- On a supported page, screening stops immediately unless the page carries a scholarly marker: a citation meta tag or a link shaped like a paper.
-- Paper rows are located by the links they must contain rather than by per-site selectors, so publishers that share no markup are all covered.
-- Content scripts inspect visible titles/DOIs/arXiv IDs, send them only to the extension service worker, and compare against the qualifying local index.
-- Highlighting screens the entire local index rather than a recent-only window, because search-result pages are dominated by older work.
-- A visible paper stays eligible for screening until it has been compared against a populated index; a failed or empty pass never permanently retires it.
-- Live screening runs under its own request budget, separate from the smaller incremental-refresh budget that previously stopped it on the first page of results.
-- Content scripts make no external network request and never persist browsing history.
-- arXiv may request one title lookup for a paper page missing locally, but the background worker performs that OpenAlex request under the incremental budget.
+- The extension declares no content script and reads no web page. Page highlighting was removed in v0.8.0.
+- Automatic scanning is off by default and offers 3 hours, 6 hours, 24 hours, and 3 days. A pass runs when Chrome starts and the interval has elapsed, and while Chrome stays open an alarm checks periodically.
+- An automatic pass requires a user-owned OpenAlex key and a selected category, never runs while another pass is in flight, and stamps its attempt before starting so a failure cannot retry in a loop.
+- A timestamp in the future, from a clock change, must not make every wake-up look due.
+- Papers that clear both bars collect in a local inbox. The toolbar icon carries a red unread count that follows the inbox and clears when it is read or emptied.
+- Native desktop notifications remain an optional Chrome permission requested only after the user enables them.
 
 ## Storage
 

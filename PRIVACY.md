@@ -7,15 +7,15 @@ FilteredResearch is a local-first Chrome extension with no FilteredResearch-oper
 ## Data handled
 
 - Research interests, selected OpenAlex fields/subfields, score selectivity, and display preferences are stored in `chrome.storage.sync` so Chrome may synchronize them under the user's Google/Chrome settings.
-- A user-supplied OpenAlex API key is stored only in `chrome.storage.local`. Local storage is restricted to trusted extension pages and the service worker; content scripts cannot read it. Chrome extension storage is not an encrypted secret vault, so users should use only a dedicated OpenAlex key and may delete it at any time.
+- A user-supplied OpenAlex API key is stored only in `chrome.storage.local`. Local storage is restricted to trusted extension pages and the service worker. Chrome extension storage is not an encrypted secret vault, so users should use only a dedicated OpenAlex key and may delete it at any time.
 - Public paper metadata, abstracts, author bibliometrics, calculated scores, notification entries, and refresh state are stored in extension-owned IndexedDB on the device.
-- On supported research sites, the extension reads visible paper titles and scholarly identifiers solely to apply the user's filters. It checks the local index first; unresolved scholarly titles/IDs may be sent by the background worker to OpenAlex or arXiv for metadata resolution. They are not saved as browsing history or sent to the FilteredResearch developer.
+- The extension reads no web page. Page highlighting was removed in v0.8.0, no content script is injected anywhere, and the extension has no access to the pages a user visits.
 
 ## Network requests
 
 The background service worker sends HTTPS requests to `https://api.openalex.org/` for public scholarly metadata and author bibliometrics, and to arXiv's public category-taxonomy page to keep category codes/names aligned with arXiv. If the user entered an OpenAlex key, it is attached only to OpenAlex requests. [OpenAlex's terms](https://openalex.org/OpenAlex_termsofservice.pdf) and [privacy policy](https://openalex.org/OpenAlex_privacy_policy.pdf) apply to its service.
 
-Content scripts do not make external network requests. The trusted background worker performs the disclosed OpenAlex/arXiv resolution. FilteredResearch does not transmit page URLs, general browsing activity, research interests, scores, or locally indexed papers to its developer.
+Only the background service worker makes network requests, and only to the destinations disclosed above. FilteredResearch does not transmit page URLs, browsing activity, research interests, scores, or locally indexed papers to its developer.
 
 ## Retention and deletion
 
@@ -34,9 +34,8 @@ Users can:
 - `sidePanel`: display the primary interface.
 - optional `notifications`: show a native alert only after the user enables notifications.
 - `https://api.openalex.org/*`: retrieve OpenAlex scholarly metadata.
-- `https://arxiv.org/*`: retrieve arXiv's official public category taxonomy and run the existing on-page highlighter.
-- `https://export.arxiv.org/*`: batch-retrieve public metadata for visible arXiv papers not yet indexed by OpenAlex.
-- scoped content-script access to arXiv, PubMed, Semantic Scholar, OpenAlex, Google Scholar, and DOI resolver pages: locally highlight matching papers.
+- `https://arxiv.org/*`: retrieve arXiv's official public category taxonomy so category codes and names stay aligned.
+- `alarms`: wake the service worker so an automatic scan can run on the interval the user chose.
 
 FilteredResearch does not request `tabs`, `history`, `cookies`, `<all_urls>`, precise location, identity, or clipboard access.
 

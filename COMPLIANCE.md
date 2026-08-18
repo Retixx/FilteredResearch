@@ -9,9 +9,9 @@ This document is an engineering risk review, not legal advice or a legal certifi
 | Single purpose | Research discovery, ranking, alerts, and on-page marking are one coherent purpose. | Implemented |
 | Minimum permissions | No `tabs`, `history`, `cookies`, scripting, identity, or all-sites permission. Site access is a fixed research-domain list. | Tested |
 | Notifications | Optional permission requested only when the user enables the feature. | Implemented |
-| Website content | Visible titles/IDs are checked locally first; unresolved scholarly identifiers may be resolved through OpenAlex/arXiv and are never sent to the developer or retained as browsing history. | Disclosed |
-| API credentials | No developer key is bundled. Every user supplies a dedicated OpenAlex key, stored locally and hidden from content scripts. | Implemented |
-| Network destinations | Background requests are restricted to HTTPS OpenAlex API access and arXiv's public taxonomy page. Content scripts perform no external fetches. | Tested |
+| Website content | Not accessed. Page highlighting was removed in v0.8.0 and no content script is declared, so the extension cannot read any page. | Removed |
+| API credentials | No developer key is bundled. Every user supplies a dedicated OpenAlex key, stored locally and restricted to trusted extension contexts. | Implemented |
+| Network destinations | Background requests are restricted to HTTPS OpenAlex API access and arXiv's public taxonomy page. Nothing else makes a request. | Tested |
 | Remote code | No remote scripts, `eval`, WebAssembly, or downloaded executable logic. | Tested |
 | Deletion | In-product database clearing, removable key, clearable inbox, and uninstall deletion are documented. | Implemented |
 | Scoring claims | Scores are explicitly described as fallible discovery heuristics, not peer review, truth, importance, reputation, or scientific merit. | Disclosed |
@@ -23,16 +23,16 @@ This document is an engineering risk review, not legal advice or a legal certifi
 
 1. Publish `PRIVACY.md` at a stable public HTTPS URL and add it to the Chrome Web Store Privacy tab.
 2. Complete the Web Store data-use questionnaire consistently: website content is handled locally; authentication information is the user-entered API key; neither is sold or transmitted to the developer.
-3. Put the local page-inspection/highlighting behavior prominently in the store description, not only in the privacy policy.
+3. State that an automatic scan, when enabled, spends the user's own OpenAlex allowance on the chosen interval.
 4. Link the OpenAlex source and terms. Do not imply endorsement by OpenAlex, arXiv, PubMed/NCBI, Semantic Scholar, Google Scholar, Crossref/DOI Foundation, or publishers.
 5. Provide accurate support/security contact details. Do not publish until those channels are monitored.
 6. Run `npm test`, `npm run check`, and `npm run package`; manually inspect the permissions shown by the exact uploaded ZIP.
-7. Re-review Chrome Web Store and OpenAlex terms before each material release. Site DOM changes can also break highlighting without notice.
+7. Re-review Chrome Web Store and OpenAlex terms before each material release.
 
 ## Known residual risks
 
 - Chrome local extension storage is not an operating-system secret manager. A dedicated, revocable OpenAlex key limits impact.
 - OpenAlex metadata, language labels, citations, author identity resolution, topics, and publication dates can be incomplete or wrong.
 - A low similarity score does not prove conceptual novelty; high author bibliometrics do not prove paper quality.
-- Website highlighting reads visible page content, which Chrome classifies as user data even though processing is local. The disclosure must remain prominent.
+- Automatic scanning issues OpenAlex requests without a further user action once enabled, so the interval and its cost must stay visible in Settings.
 - A Chrome Web Store review, passing automated tests, or this checklist does not guarantee compliance with every jurisdiction, publisher term, or future policy update.

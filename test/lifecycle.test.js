@@ -17,18 +17,17 @@ const worker = await readFile(new URL("../src/background/service-worker.js", imp
 const panel = await readFile(new URL("../src/sidepanel/sidepanel.html", import.meta.url), "utf8");
 const panelScript = await readFile(new URL("../src/sidepanel/sidepanel.js", import.meta.url), "utf8");
 const db = await readFile(new URL("../src/shared/db.js", import.meta.url), "utf8");
-const sites = await readFile(new URL("../src/content/research-sites.js", import.meta.url), "utf8");
-const siteScript = sites;
-const arxiv = await readFile(new URL("../src/content/arxiv.js", import.meta.url), "utf8");
 const notificationsPage = await readFile(new URL("../src/notifications/notifications.html", import.meta.url), "utf8");
 const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"));
 
-test("discovery has no alarm, startup, settings-save, or depth-change trigger", () => {
-  assert.doesNotMatch(worker, /chrome\.alarms/);
+test("editing settings or depth never starts discovery", () => {
+  // Automatic scanning arrived in v0.8.0, but it is the only automatic trigger.
+  // Editing settings must still never spend the user's OpenAlex allowance, and
+  // installing the extension must not immediately launch a pass either.
   assert.match(worker, /case "SETTINGS_CHANGED":[\s\S]*?discoveryStarted: false/);
   assert.match(worker, /case "SET_MAX_TIME_FRAME":[\s\S]*?discoveryStarted: false/);
-  assert.doesNotMatch(worker.match(/chrome\.runtime\.onInstalled[\s\S]*?\n\}\);/)?.[0] || "", /refresh\(/);
-  assert.doesNotMatch(worker.match(/chrome\.runtime\.onStartup[\s\S]*?\n\}\);/)?.[0] || "", /refresh\(/);
+  const installed = worker.match(/chrome\.runtime\.onInstalled[\s\S]*?\n\}\);/)?.[0] || "";
+  assert.doesNotMatch(installed, /runAutoScanIfDue/, "installing must not immediately scan");
 });
 
 test("both timeframe message spellings are accepted and depth modes are labeled", () => {
@@ -95,31 +94,6 @@ test("the feed never scans the works store just to report counts", () => {
   assert.match(worker, /getMetadataMany\(\[/);
 });
 
-test("on-page highlighting screens the whole local index", () => {
-  // A 30-day cutoff meant search-result pages, which are mostly older work,
-  // could never match.
-  const siteMatches = worker.match(/async function getSiteMatches[\s\S]*?const qualified[^\n]*\n/)?.[0] || "";
-  assert.match(siteMatches, /qualifiedPapers\(settings, \{ days: null \}\)/);
-  assert.match(worker, /siteScreenBudgetUsd/);
-});
-
-test("a paper stays eligible for highlighting until the index can answer", () => {
-  // The worker reports whether its answer is authoritative, so a still-warming
-  // index never retires a paper that would otherwise have matched.
-  assert.match(worker, /indexReady: false/);
-  assert.match(worker, /return \{ matches: await screenSiteItemsInner\(items\), indexReady: true \}/);
-  assert.match(sites, /const indexReady = payload\.indexReady !== false;/);
-  assert.match(sites, /if \(!response\?\.ok\) return;/);
-  const handler = sites.match(/candidates\.forEach\([\s\S]*?\n {6}\}\);/)?.[0] || "";
-  assert.match(handler, /if \(match\) \{[\s\S]*?filteredresearchChecked = "true"/);
-  assert.match(handler, /if \(indexReady\) candidate\.container\.dataset\.filteredresearchChecked = "true"/);
-  // Retries are spaced and bounded so page churn cannot exhaust them and an
-  // empty index cannot cause endless screening.
-  assert.match(sites, /MIN_RETRY_GAP_MS/);
-  assert.match(sites, /DEADLINE_MS/);
-  assert.match(sites, /if \(scheduled \|\| expired\(\)\) return;/);
-});
-
 test("a narrowed index depth bounds every date view", () => {
   // A completed deeper pass leaves older papers in the store; the saved depth
   // is the ceiling regardless, so a 1-week scope cannot show month-old work.
@@ -157,27 +131,6 @@ test("recency uses first public release, not journal re-publication", () => {
   ]);
   assert.equal(merged.firstReleaseDate, "2025-05-01");
   assert.match(worker, /function releasedOn/);
-});
-
-test("every content script reads the screening envelope the worker sends", () => {
-  // arxiv.js read result as a flat map after the envelope changed, which
-  // silently removed every badge on arXiv pages.
-  assert.match(arxiv, /result\?\.matches/);
-  assert.doesNotMatch(arxiv, /const scores = response\.result \|\| \{\};/);
-  assert.match(sites, /payload\.matches/);
-});
-
-test("highlighting covers many publishers without touching other browsing", () => {
-  const matches = manifest.content_scripts.flatMap((script) => script.matches);
-  assert.ok(matches.length > 20, "expected broad research-site coverage");
-  assert.ok(matches.every((site) => site.startsWith("https://")));
-  assert.ok(matches.every((site) => !site.includes("<all_urls>") && !site.includes("*://")));
-  for (const host of ["nature.com", "sciencedirect.com", "biorxiv.org", "openreview.net"]) {
-    assert.ok(matches.some((site) => site.includes(host)), `missing ${host}`);
-  }
-  // Nothing runs at all on a page with no scholarly markers.
-  assert.match(siteScript, /function hasScholarlySignal/);
-  assert.match(siteScript, /if \(!hasScholarlySignal\(\)\) return;/);
 });
 
 test("retrieval is hybrid and never blocks a render", () => {

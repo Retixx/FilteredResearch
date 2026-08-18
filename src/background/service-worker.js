@@ -1,7 +1,9 @@
 import {
   WINDOWS,
+  autoScanDue,
   effectiveHorizonDays,
   loadSettings,
+  normalizeAutoScanHours,
   normalizeSettings,
   windowsWithin,
 } from "../shared/defaults.js";
@@ -15,7 +17,6 @@ import {
   getById,
   getMetadata,
   getMetadataMany,
-  getWorksByArxivIds,
   pruneCandidates,
   setMetadata,
 } from "../shared/db.js";
@@ -93,7 +94,7 @@ function deduplicate(works) {
   return [...new Map(works.map((work) => [work.id, work])).values()];
 }
 
-// The filtered corpus is shared by the feed and by page highlighting, and its
+// The filtered corpus is shared by the feed and the notification pass, and its
 // cache key cannot see writes that happen before `lastRefresh` is stamped, so
 // every write to the works store drops it explicitly.
 async function storeWorks(works) {
@@ -730,6 +731,8 @@ async function performRefresh(reason = "manual") {
       setMetadata("coverageByScope", { ...coverageByScope, [signature]: coverage }),
       setMetadata("searchHistory", [historyEntry, ...history.filter((item) => item.filterSignature !== currentFilterSignature)].slice(0, 12)),
     ]);
+    // Any pass can add unread papers, so the toolbar dot follows every one.
+    await refreshUnreadBadge();
     return state;
   } catch (error) {
     const state = {
@@ -949,167 +952,6 @@ async function fillFeedGap({ window = "week" } = {}) {
   return { added: scored.length, window, days };
 }
 
-async function getQualifiedArxivScores(ids) {
-  const settings = await loadSettings();
-  const qualified = await qualifiedMonth(settings);
-  const allowed = new Set(qualified.works.map((work) => work.id));
-  const found = await getWorksByArxivIds(ids);
-  return Object.fromEntries(
-    Object.entries(found)
-      .filter(([, work]) => allowed.has(work.id))
-      .map(([id, work]) => [id, cleanWorkForDisplay(work)]),
-  );
-}
-
-function normalizeDoi(value) {
-  return String(value || "")
-    .toLowerCase()
-    .replace(/^https?:\/\/(?:dx\.)?doi\.org\//, "")
-    .replace(/^doi:\s*/, "")
-    .trim();
-}
-
-function normalizedTitle(value) {
-  return String(value || "")
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-async function getSiteMatches(items = []) {
-  const settings = await loadSettings();
-  if (!settings.showArxivBadges) return {};
-  // Search-result pages are dominated by older work, so highlighting screens the
-  // whole local index rather than the 30-day notification window.
-  const qualified = await qualifiedPapers(settings, { days: null });
-  const byDoi = new Map();
-  const byArxiv = new Map();
-  const byTitle = new Map();
-  for (const work of qualified.works) {
-    if (work.doi) byDoi.set(normalizeDoi(work.doi), work);
-    if (work.arxivId) byArxiv.set(work.arxivId, work);
-    byTitle.set(normalizedTitle(work.title), work);
-  }
-  return Object.fromEntries(
-    items.flatMap((item) => {
-      const work =
-        byDoi.get(normalizeDoi(item.doi)) ||
-        byArxiv.get(String(item.arxivId || "").replace(/v\d+$/i, "")) ||
-        byTitle.get(normalizedTitle(item.title));
-      return work
-        ? [[
-            item.key,
-            {
-              id: work.id,
-              title: cleanWorkForDisplay(work).title,
-              noveltyScore: work.noveltyScore,
-              researcherScore: work.researcherScore,
-              prominence: work.prominence || [],
-              authorshipOverride: Boolean(work.authorshipOverride),
-            },
-          ]]
-        : [];
-    }),
-  );
-}
-
-function xmlValue(xml, tag) {
-  const match = xml.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, "i"));
-  return cleanWorkForDisplay({ title: match?.[1] || "" }).title;
-}
-
-async function fetchArxivFallback(items) {
-  const byId = new Map(items.filter((item) => item.arxivId).map((item) => [String(item.arxivId).replace(/v\d+$/i, ""), item]));
-  if (!byId.size) return [];
-  const url = new URL("https://export.arxiv.org/api/query");
-  url.searchParams.set("id_list", [...byId.keys()].join(","));
-  url.searchParams.set("max_results", String(byId.size));
-  const response = await fetch(url, { headers: { Accept: "application/atom+xml" } });
-  if (!response.ok) return [];
-  const xml = await response.text();
-  return [...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/gi)].flatMap((match) => {
-    const entry = match[1];
-    const arxivId = xmlValue(entry, "id").split("/").at(-1)?.replace(/v\d+$/i, "");
-    const item = byId.get(arxivId);
-    if (!item) return [];
-    const authorships = [...entry.matchAll(/<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/gi)].map((author, index) => {
-      const name = cleanWorkForDisplay({ title: author[1] }).title;
-      return { authorId: `ARXIV-A-${normalizedTitle(name)}`, name, position: index === 0 ? "first" : "middle", isCorresponding: false, institutions: [], rawAffiliations: [] };
-    });
-    const categories = [...entry.matchAll(/<category[^>]*term=["']([^"']+)["']/gi)].map((category) => category[1]);
-    return [{ id: `ARXIV-${arxivId}`, arxivId, title: xmlValue(entry, "title"), abstract: xmlValue(entry, "summary"), language: "en",
-      publicationDate: xmlValue(entry, "published").slice(0, 10) || isoDate(), doi: null, url: `https://arxiv.org/abs/${arxivId}`,
-      sourceName: "arXiv", sources: [{ name: "arXiv", url: `https://arxiv.org/abs/${arxivId}`, doi: null }], workType: "preprint", authorships,
-      topics: [], arxivCategories: categories.length ? categories : item.categories || [], isBaseline: false, fetchedAt: new Date().toISOString() }];
-  });
-}
-
-// Reports whether the answer is authoritative. A content script cannot tell an
-// empty result caused by a still-warming index from a genuine no-match, and
-// guessing wrong is what made highlighting look permanently broken.
-async function screenSiteItems(items = []) {
-  const settings = await loadSettings();
-  if (!settings.showArxivBadges) return { matches: {}, indexReady: true };
-  // With nothing indexed there is no reference set to score against, so answer
-  // cheaply and locally rather than spending OpenAlex requests on every retry.
-  if (!(await filteredCorpus(settings)).length) return { matches: {}, indexReady: false };
-  return { matches: await screenSiteItemsInner(items), indexReady: true };
-}
-
-async function screenSiteItemsInner(items = []) {
-  const local = await getSiteMatches(items);
-  const unresolved = items.filter((item) => !local[item.key] && item.title).slice(0, 100);
-  if (!unresolved.length) return local;
-  const settings = await loadSettings();
-  // The incremental budget is sized for a refresh pass and tripped on the first
-  // page of results, which made live screening silently return nothing.
-  const client = openAlexClient({ apiKey: settings.apiKey, maxEstimatedCostUsd: settings.siteScreenBudgetUsd });
-  let resolved = [];
-  try { resolved = await client.findWorksByTitles(unresolved.map((item) => item.title)); }
-  catch (error) { console.warn("OpenAlex visible-paper lookup failed", error); }
-  const itemByTitle = new Map(unresolved.map((item) => [normalizedTitle(item.title), item]));
-  const resolvedTitles = new Set(resolved.map((work) => normalizedTitle(work.title)));
-  const arxivFallback = await fetchArxivFallback(unresolved.filter((item) => !resolvedTitles.has(normalizedTitle(item.title))));
-  const candidates = [...resolved.map((work) => {
-    const item = itemByTitle.get(normalizedTitle(work.title));
-    return { ...work, arxivId: work.arxivId || item?.arxivId || null, arxivCategories: item?.categories || [], isBaseline: false };
-  }), ...arxivFallback].filter((work) => matchesResearchFilters(work, settings));
-  if (!candidates.length) return local;
-  const authorIds = chooseAuthorIds(candidates, Math.min(settings.maxAuthors, 2_000));
-  const fetchedAuthors = await client.fetchAuthors(authorIds);
-  if (fetchedAuthors.length) await bulkPut("authors", fetchedAuthors);
-  const allAuthors = deduplicateAuthors([...(await getAll("authors")), ...fetchedAuthors]);
-  await getProminenceRoster(allAuthors);
-  const references = selectReferences(await getAll("works"), settings.maxReferenceWorks);
-  const scored = scoreBatch(candidates, references, allAuthors, { maxPeerComparisons: settings.maxPeerComparisons });
-  await storeWorks(scored);
-  return getSiteMatches(items);
-}
-
-async function scoreArxivPage({ title, arxivId }) {
-  const existing = await getWorksByArxivIds([arxivId]);
-  if (existing[arxivId]?.scoringVersion === SCORING_VERSION) return existing[arxivId];
-  const settings = await loadSettings();
-  const client = openAlexClient({
-    apiKey: settings.apiKey,
-    maxEstimatedCostUsd: settings.incrementalScanBudgetUsd,
-  });
-  const work = await client.findWorkByTitle(title);
-  if (!work) return null;
-  work.arxivId ||= arxivId;
-  const authorIds = chooseAuthorIds([work], 100);
-  const fetchedAuthors = await client.fetchAuthors(authorIds);
-  if (fetchedAuthors.length) await bulkPut("authors", fetchedAuthors);
-  const allAuthors = deduplicateAuthors([...(await getAll("authors")), ...fetchedAuthors]);
-  const references = selectReferences(await getAll("works"), settings.maxReferenceWorks);
-  const [scored] = scoreBatch([work], references, allAuthors, {
-    maxPeerComparisons: settings.maxPeerComparisons,
-  });
-  await storeWorks([scored]);
-  return scored;
-}
-
 async function getNotifications() {
   return (await getMetadata("notificationInbox")) || [];
 }
@@ -1165,43 +1007,115 @@ async function handleMessage(message) {
       return (await getMetadata("refreshState")) || null;
     case "SETTINGS_CHANGED":
       feedCorpusCache = null;
+      await scheduleAutoScan();
       await setMetadata("settingsChangedAt", new Date().toISOString());
       return { ok: true, discoveryStarted: false };
     case "CLEAR_DATA":
       await clearDatabase();
       feedCorpusCache = null;
       return { ok: true };
-    case "GET_ARXIV_SCORES":
-      return getQualifiedArxivScores(message.payload?.ids || []);
-    case "GET_SITE_MATCHES":
-      return getSiteMatches(message.payload?.items || []);
-    case "SCREEN_SITE_ITEMS":
-      return screenSiteItems(message.payload?.items || []);
-    case "SCORE_ARXIV_PAGE":
-      return scoreArxivPage(message.payload || {});
     case "GET_NOTIFICATIONS":
       return getNotifications();
-    case "MARK_NOTIFICATIONS_READ":
-      return markNotificationsRead(message.payload?.ids || []);
+    case "MARK_NOTIFICATIONS_READ": {
+      const unread = await markNotificationsRead(message.payload?.ids || []);
+      await refreshUnreadBadge();
+      return unread;
+    }
+    case "GET_AUTO_SCAN_STATE":
+      return {
+        lastAutoScan: (await getMetadata("lastAutoScan")) || null,
+        unread: (await getMetadata("notificationInbox") || []).filter((entry) => entry.unread).length,
+      };
+    case "RUN_AUTO_SCAN_IF_DUE":
+      return runAutoScanIfDue("manual-check");
     case "CLEAR_NOTIFICATIONS":
       await setMetadata("notificationInbox", []);
+      await refreshUnreadBadge();
       return { ok: true };
     default:
       throw new Error(`Unknown message type: ${message?.type}`);
   }
 }
 
-chrome.runtime.onInstalled.addListener((details) => {
+// The toolbar icon carries a red dot whenever the inbox holds unread papers, so
+// a background pass is visible without opening anything.
+const BADGE_COLOUR = "#c8362f";
+async function refreshUnreadBadge() {
+  if (!chrome.action?.setBadgeText) return 0;
+  const inbox = (await getMetadata("notificationInbox")) || [];
+  const unread = inbox.filter((entry) => entry.unread).length;
+  try {
+    await chrome.action.setBadgeBackgroundColor({ color: BADGE_COLOUR });
+    if (chrome.action.setBadgeTextColor) await chrome.action.setBadgeTextColor({ color: "#ffffff" });
+    await chrome.action.setBadgeText({ text: unread ? (unread > 99 ? "99+" : String(unread)) : "" });
+  } catch (error) {
+    console.warn("Could not update the toolbar badge", error);
+  }
+  return unread;
+}
+
+// Automatic scanning. A pass is due when the chosen interval has elapsed since
+// the last automatic one; the alarm covers a browser left running for days and
+// the startup check covers the interval passing while Chrome was closed.
+const AUTO_SCAN_ALARM = "filteredresearch-auto-scan";
+const AUTO_SCAN_CHECK_MINUTES = 30;
+
+async function scheduleAutoScan() {
+  if (!chrome.alarms) return;
+  const { autoScanHours } = await loadSettings();
+  await chrome.alarms.clear(AUTO_SCAN_ALARM);
+  if (!normalizeAutoScanHours(autoScanHours)) return;
+  // Checked more often than the interval so a due pass starts promptly rather
+  // than waiting a whole further period.
+  chrome.alarms.create(AUTO_SCAN_ALARM, { periodInMinutes: AUTO_SCAN_CHECK_MINUTES });
+}
+
+async function runAutoScanIfDue(reason = "alarm") {
+  const settings = await loadSettings();
+  const hours = normalizeAutoScanHours(settings.autoScanHours);
+  if (!hours) return { ran: false, skipped: "automatic scanning is off" };
+  const selection = selectionFromSettings(settings);
+  if (!settings.apiKey || !(selection.fieldIds.length || selection.subfieldIds.length)) {
+    return { ran: false, skipped: "needs an API key and a selected category" };
+  }
+  const lastScan = await getMetadata("lastAutoScan");
+  if (!autoScanDue(hours, lastScan)) return { ran: false, skipped: "not due yet" };
+  if (refreshPromise) return { ran: false, skipped: "a pass is already running" };
+
+  await setMetadata("lastAutoScan", new Date().toISOString());
+  try {
+    const state = await refresh(`auto:${reason}`);
+    await refreshUnreadBadge();
+    return { ran: true, notificationsGenerated: state?.notificationsGenerated || 0 };
+  } catch (error) {
+    console.warn("Automatic scan failed", error);
+    return { ran: false, skipped: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+chrome.runtime.onInstalled.addListener(() => {
   Promise.all([
     ensureDefaults(),
     chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }),
     getMetadata("refreshState").then((state) => state?.status === "running" ? setMetadata("refreshState", { ...state, status: "ready", interruptedAt: new Date().toISOString() }) : null),
+    scheduleAutoScan(),
+    refreshUnreadBadge(),
   ]).catch(console.error);
 });
 
 chrome.runtime.onStartup.addListener(() => {
-  ensureDefaults().catch(console.error);
+  ensureDefaults()
+    .then(() => Promise.all([scheduleAutoScan(), refreshUnreadBadge()]))
+    .then(() => runAutoScanIfDue("startup"))
+    .catch(console.error);
 });
+
+if (chrome.alarms?.onAlarm) {
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name !== AUTO_SCAN_ALARM) return;
+    runAutoScanIfDue("alarm").catch(console.error);
+  });
+}
 
 if (chrome.notifications?.onClicked) {
   chrome.notifications.onClicked.addListener((notificationId) => {

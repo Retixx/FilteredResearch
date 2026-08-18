@@ -11,8 +11,6 @@ const optionsScript = await readFile(new URL("../src/options/options.js", import
 const notificationsScript = await readFile(new URL("../src/notifications/notifications.js", import.meta.url), "utf8");
 const panelSource = await readFile(new URL("../src/sidepanel/sidepanel.js", import.meta.url), "utf8");
 const panelCss = await readFile(new URL("../src/sidepanel/sidepanel.css", import.meta.url), "utf8");
-const siteCss = await readFile(new URL("../src/content/research-sites.css", import.meta.url), "utf8");
-const arxivCss = await readFile(new URL("../src/content/arxiv.css", import.meta.url), "utf8");
 
 const AI_SCOPE = {
   englishOnly: true,
@@ -158,13 +156,3 @@ test("narrowing index depth re-filters the cache instead of refetching", () => {
   assert.match(handler, /renderResult\(state\.bundle\[state\.window\]/);
 });
 
-test("page highlights are large enough to notice", () => {
-  // The badge was 9px with no fill, which was easy to miss entirely.
-  const size = (css) => Number(css.match(/font:\s*\d+\s+(\d+)px/)?.[1] || 0);
-  assert.ok(size(siteCss) >= 11, `site badge font too small: ${size(siteCss)}px`);
-  assert.ok(size(arxivCss) >= 11, `arxiv badge font too small: ${size(arxivCss)}px`);
-  for (const css of [siteCss, arxivCss]) {
-    assert.match(css, /border-radius:\s*999px/);
-    assert.match(css, /background:\s*color-mix/);
-  }
-});

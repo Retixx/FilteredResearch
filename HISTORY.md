@@ -118,6 +118,13 @@ Five separate defects, each confirmed before it was changed.
 
 Also hardened after a fuzz sweep of every exported function: a record with no abstract crashed scoring outright, `undefined` was entering the term table and skewing IDF, one malformed stored record could abort an entire feed render, and scores could reach the interface as NaN.
 
+## v0.8.0 — Automatic scanning, no page access
+
+- Added automatic scanning, off by default, with intervals of 3 hours, 6 hours, 24 hours and 3 days. A pass runs when Chrome starts and the interval has elapsed, and an alarm checks periodically while Chrome stays open. It requires a user-owned key and a selected category, never runs alongside another pass, and stamps its attempt before starting so a failure cannot retry in a loop. A future timestamp from a clock change does not make every wake-up look due.
+- The toolbar icon now carries a red unread count whenever the inbox holds new papers, so a background pass is visible without opening anything. It follows every path that changes the count and clears when the inbox is read or emptied.
+- Removed page highlighting entirely, along with both content scripts, their styles, the settings toggle, four message handlers and the `export.arxiv.org` host permission. The extension now declares no content script at all, so ordinary browsing never runs extension code and there are no interruptions while scrolling. Privacy and compliance documents were updated to match.
+- Replaced the "FR" lettering in the side panel, settings and inbox headers with the book mark.
+
 ## Current state
 
-The installed development build is **v0.7.2**. Automated tests at release: **80 passing**.
+The installed development build is **v0.8.0**. Automated tests at release: **83 passing**.

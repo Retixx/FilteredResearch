@@ -1,13 +1,20 @@
 # FilteredResearch
 
-FilteredResearch v0.7.2 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
+FilteredResearch v0.8.0 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
 
 - **Novelty**: lexical distance from up to 320 older, field-adjacent OpenAlex papers, adjusted for evidence completeness, rare title phrases, cross-field combinations, and incremental wording.
 - **Authorship**: an established-track-record signal using author h-index, citations, recent citedness, works count, ORCID presence, and authorship role.
 
 Neither score proves scientific novelty, quality, correctness, reputation, or significance. They are screening heuristics for deciding what to inspect next.
 
-## What changed in v0.7.2
+## What changed in v0.8.0
+
+- Automatic scanning, off by default, on a 3-hour, 6-hour, 24-hour or 3-day interval. A pass runs when Chrome starts if the interval has elapsed, and periodically while Chrome stays open. It needs your own OpenAlex key and a selected category.
+- The toolbar icon shows a red unread count when a background pass finds papers that clear both bars.
+- Page highlighting is gone. No content script is declared, so the extension reads no web page and nothing appears while you browse.
+- The side panel, settings and inbox headers now show the book mark instead of the "FR" lettering.
+
+## Earlier, in v0.7.2
 
 - Searching "RAG" now finds retrieval-augmented generation papers. Interest matching was a substring test, so short queries matched inside unrelated words, and an abbreviation could not find its own expansion. Matching is whole-token, and a glossary resolves common research abbreviations both ways.
 - Novelty separates consolidation work from new work. Standing was a z-score whose scale collapsed on a uniform corpus, pinning every interesting paper to the same value; it is now a rank within the field, with a second signal for vocabulary the field does not already use, and an explicit penalty for surveys, benchmarks and empirical studies.

@@ -172,7 +172,7 @@ async function populate() {
   authorship.value = settings.authorshipSelectivity;
   document.querySelector("#default-window").value = settings.defaultWindow;
   document.querySelector("#default-sort").value = settings.defaultSort;
-  document.querySelector("#show-arxiv-badges").checked = settings.showArxivBadges;
+  document.querySelector("#auto-scan").value = String(settings.autoScanHours ?? 0);
   document.querySelector("#english-only").checked = settings.englishOnly;
   document.querySelector("#strict-interest").checked = Boolean(settings.strictInterestFilter);
   document.querySelector("#notifications-enabled").checked = settings.notificationsEnabled;
@@ -211,7 +211,7 @@ form.addEventListener("submit", async (event) => {
       authorshipSelectivity: Number(authorship.value),
       defaultWindow: document.querySelector("#default-window").value,
       defaultSort: document.querySelector("#default-sort").value,
-      showArxivBadges: document.querySelector("#show-arxiv-badges").checked,
+      autoScanHours: Number(document.querySelector("#auto-scan").value),
       selectedFields: selected.fieldIds,
       selectedSubfields: selected.subfieldIds,
       selectedArxivGroups: selected.arxivGroups,

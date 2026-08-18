@@ -29,6 +29,30 @@ export const INDEX_DEPTHS = Object.freeze([
 
 export const MAX_INDEX_DEPTH_DAYS = 90;
 
+// Automatic scanning. `0` keeps discovery entirely manual, which stays the
+// default because a pass spends the user's own OpenAlex allowance.
+export const AUTO_SCAN_CHOICES = Object.freeze([
+  { hours: 0, label: "Only when I press refresh" },
+  { hours: 3, label: "Every 3 hours" },
+  { hours: 6, label: "Every 6 hours" },
+  { hours: 24, label: "Every 24 hours" },
+  { hours: 72, label: "Every 3 days" },
+]);
+
+export function normalizeAutoScanHours(value) {
+  const hours = Number(value);
+  return AUTO_SCAN_CHOICES.some((choice) => choice.hours === hours) ? hours : 0;
+}
+
+// Whether an automatic pass is due, given when the last one completed.
+export function autoScanDue(autoScanHours, lastScanIso, now = Date.now()) {
+  const hours = normalizeAutoScanHours(autoScanHours);
+  if (!hours) return false;
+  const last = Date.parse(lastScanIso || "");
+  if (!Number.isFinite(last)) return true;
+  return now - last >= hours * 60 * 60 * 1000;
+}
+
 export const DEFAULT_SETTINGS = Object.freeze({
   queries: [],
   selectedFields: [],
@@ -56,9 +80,8 @@ export const DEFAULT_SETTINGS = Object.freeze({
   fullRebuildDays: 7,
   fullScanBudgetUsd: 0.95,
   incrementalScanBudgetUsd: 0.02,
-  siteScreenBudgetUsd: 0.15,
   gapFillBudgetUsd: 0.1,
-  showArxivBadges: true,
+  autoScanHours: 0,
   strictInterestFilter: false,
 });
 
@@ -145,7 +168,6 @@ export function normalizeSettings(value = {}) {
     fullRebuildDays: [3, 30],
     fullScanBudgetUsd: [0.05, 0.95],
     incrementalScanBudgetUsd: [0.005, 0.1],
-    siteScreenBudgetUsd: [0.02, 0.5],
     gapFillBudgetUsd: [0.01, 0.4],
   };
   for (const [key, [minimum, maximum]] of Object.entries(numericBounds)) {
@@ -164,8 +186,8 @@ export function normalizeSettings(value = {}) {
   merged.perQuery = Math.max(merged.perQuery, DEFAULT_SETTINGS.perQuery);
   merged.maxDiscoveryWorks = Math.max(merged.maxDiscoveryWorks, DEFAULT_SETTINGS.maxDiscoveryWorks);
   merged.fullScanBudgetUsd = Math.max(merged.fullScanBudgetUsd, DEFAULT_SETTINGS.fullScanBudgetUsd);
-  merged.showArxivBadges = Boolean(merged.showArxivBadges);
   merged.strictInterestFilter = Boolean(merged.strictInterestFilter);
+  merged.autoScanHours = normalizeAutoScanHours(merged.autoScanHours);
   merged.englishOnly = merged.englishOnly !== false;
   merged.notificationsEnabled = Boolean(merged.notificationsEnabled);
   delete merged.selectedCategories;
