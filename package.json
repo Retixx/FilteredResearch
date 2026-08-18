@@ -7,7 +7,8 @@
   "scripts": {
     "test": "node --test test/*.test.js",
     "check": "node --check src/background/service-worker.js && node --check src/sidepanel/sidepanel.js && node --check src/options/options.js && node --check src/notifications/notifications.js && node --check src/shared/refresh-progress.js",
-    "package": "node scripts/package.mjs"
+    "package": "node scripts/package.mjs",
+    "zip": "npm run package && node scripts/zip.mjs"
   },
   "engines": {
     "node": ">=20"

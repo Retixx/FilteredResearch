@@ -5,3 +5,6 @@ coverage/
 *.zip
 work/
 outputs/
+
+# Chrome Web Store upload archive
+FilteredResearch-web-store.zip
