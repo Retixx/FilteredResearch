@@ -44,9 +44,20 @@ async function send(type, payload) {
   return response.result;
 }
 
+// Intl throws RangeError on an invalid date, which would take down the whole
+// render for one paper with missing or malformed metadata.
 function formatDate(value) {
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(
-    new Date(`${value}T12:00:00`),
+  const parsed = new Date(`${value}T12:00:00`);
+  if (!value || Number.isNaN(parsed.getTime())) return "Undated";
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric" }).format(parsed);
+}
+
+function relativeHours(value) {
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return null;
+  return new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }).format(
+    Math.round((parsed - Date.now()) / 3_600_000),
+    "hour",
   );
 }
 
@@ -257,12 +268,8 @@ function renderResult(result) {
   elements.empty.hidden = result.resultCount > 0 || discoveryRunning;
   elements.feed.hidden = result.resultCount === 0;
   const lastRefresh = result.stats.lastRefresh;
-  elements.status.textContent = lastRefresh
-    ? `Screened ${new Intl.RelativeTimeFormat(undefined, { numeric: "auto" }).format(
-        Math.round((Date.parse(lastRefresh) - Date.now()) / 3_600_000),
-        "hour",
-      )}`
-    : "Ready for the first screen";
+  const screenedAgo = relativeHours(lastRefresh);
+  elements.status.textContent = screenedAgo ? `Screened ${screenedAgo}` : "Ready for the first screen";
   const coverage = result.coverage;
   if (result.requestedBeyondCoverage) {
     showNotice(`This view is capped at your ${result.indexedHorizonDays}-day index depth. Raise Index depth and refresh to reach further back.`);
@@ -317,7 +324,9 @@ async function loadFeed({ skeleton = true } = {}) {
       state.window = state.availableWindows.at(-1) || state.window;
     }
     updateControls();
-    renderResult(state.bundle[state.window] || Object.values(state.bundle)[0]);
+    const view = state.bundle[state.window] || Object.values(state.bundle)[0];
+    if (!view) throw new Error("No date view is available for this index depth.");
+    renderResult(view);
   } catch (error) {
     state.bundle = null;
     elements.feed.replaceChildren();
@@ -443,7 +452,7 @@ elements.maxTimeframe.addEventListener("change", async () => {
     if (narrowing) {
       state.availableWindows = windowsWithin(state.maxTimeframeDays);
       updateControls();
-      renderResult(state.bundle[state.window] || Object.values(state.bundle)[0]);
+      renderResult(state.bundle[state.window] || Object.values(state.bundle)[0] || { papers: [], resultCount: 0, hasMore: false, stats: {}, coverage: null });
       showNotice("Index depth narrowed. Saved papers were re-filtered locally; nothing was fetched.", "success");
       return;
     }
@@ -456,20 +465,32 @@ elements.maxTimeframe.addEventListener("change", async () => {
 elements.refresh.addEventListener("click", refresh);
 elements.loadMore.addEventListener("click", loadMore);
 elements.notifications.addEventListener("click", () => {
-  chrome.tabs.create({ url: chrome.runtime.getURL("src/notifications/notifications.html") });
+  Promise.resolve(chrome.tabs.create({ url: chrome.runtime.getURL("src/notifications/notifications.html") })).catch(
+    (error) => showNotice(error?.message || "Could not open the inbox.", "error"),
+  );
 });
 document.querySelector("#empty-refresh").addEventListener("click", refresh);
 for (const button of [document.querySelector("#settings-button"), document.querySelector("#empty-settings")]) {
-  button.addEventListener("click", () => chrome.runtime.openOptionsPage());
+  button.addEventListener("click", () => {
+    Promise.resolve(chrome.runtime.openOptionsPage()).catch(
+      (error) => showNotice(error?.message || "Could not open settings.", "error"),
+    );
+  });
 }
 
-chrome.storage.sync.get("settings").then(({ settings }) => {
-  state.window = settings?.defaultWindow || state.window;
-  state.sort = settings?.defaultSort || state.sort;
-  state.maxTimeframeDays = Number(settings?.maxTimeframeDays || state.maxTimeframeDays);
-  if ((WINDOWS[state.window]?.days || 7) > state.maxTimeframeDays) {
-    state.window = widestWindowWithin(state.maxTimeframeDays);
-  }
-  updateControls();
-  loadFeed();
-});
+chrome.storage.sync
+  .get("settings")
+  .then(({ settings }) => {
+    state.window = settings?.defaultWindow || state.window;
+    state.sort = settings?.defaultSort || state.sort;
+    state.maxTimeframeDays = Number(settings?.maxTimeframeDays || state.maxTimeframeDays);
+    if ((WINDOWS[state.window]?.days || 7) > state.maxTimeframeDays) {
+      state.window = widestWindowWithin(state.maxTimeframeDays);
+    }
+    updateControls();
+    loadFeed();
+  })
+  .catch((error) => {
+    showNotice(error?.message || "Could not read saved settings.", "error");
+    loadFeed();
+  });

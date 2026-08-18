@@ -259,8 +259,12 @@ document.querySelector("#rebuild-index").addEventListener("click", async (event)
 
 document.querySelector("#clear-data").addEventListener("click", async () => {
   if (!window.confirm("Clear all screened papers, author metrics, and score history?")) return;
-  const response = await chrome.runtime.sendMessage({ type: "CLEAR_DATA" });
-  status.textContent = response?.ok ? "Research database cleared." : response?.error;
+  try {
+    const response = await chrome.runtime.sendMessage({ type: "CLEAR_DATA" });
+    status.textContent = response?.ok ? "Research database cleared." : response?.error || "Could not clear the database.";
+  } catch (error) {
+    status.textContent = error.message;
+  }
 });
 
 populate().catch((error) => {

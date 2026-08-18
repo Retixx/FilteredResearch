@@ -631,7 +631,23 @@ async function performRefresh(reason = "manual") {
       deduplicate([...existingWorks, ...baseline]).filter((work) => !candidateIds.has(work.id)),
       settings.maxReferenceWorks,
     );
-    const scored = scoreBatch(candidates, references, allAuthors, {
+    // Novelty is calibrated against the field, so scores from an older scoring
+    // version are not comparable with new ones. Anything stale is rescored in
+    // the same batch, which also keeps one consistent calibration across the
+    // whole feed rather than mixing scales.
+    const stale = existingWorks.filter(
+      (item) => !item.isBaseline && item.scoringVersion && item.scoringVersion !== SCORING_VERSION && !candidateIds.has(item.id),
+    );
+    if (stale.length) {
+      await writeProgress({
+        phase: "rescoring",
+        lane: `${stale.length} saved papers on an older scoring version`,
+        fetched: 0,
+        total: stale.length,
+        pages: 0,
+      });
+    }
+    const scored = scoreBatch([...candidates, ...stale], references, allAuthors, {
       maxPeerComparisons: settings.maxPeerComparisons,
     });
     await storeWorks(scored);

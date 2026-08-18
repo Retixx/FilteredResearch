@@ -1,13 +1,19 @@
 # FilteredResearch
 
-FilteredResearch v0.6.2 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
+FilteredResearch v0.7.0 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
 
 - **Novelty**: lexical distance from up to 320 older, field-adjacent OpenAlex papers, adjusted for evidence completeness, rare title phrases, cross-field combinations, and incremental wording.
 - **Authorship**: an established-track-record signal using author h-index, citations, recent citedness, works count, ORCID presence, and authorship role.
 
 Neither score proves scientific novelty, quality, correctness, reputation, or significance. They are screening heuristics for deciding what to inspect next.
 
-## What changed in v0.6.2
+## What changed in v0.7.0
+
+- Novelty now uses the full 1-100 range. It is measured against how crowded the field itself is rather than against raw cosine distance, which in a wide vocabulary reads 80-95% "distant" for derivative and groundbreaking work alike. On identical test papers the old formula put every ordinary paper between 79 and 82; the new one spreads them across 26/53/67 at the quartiles with derivative work near 0 and genuinely new work near 100.
+- A refresh rescores saved papers, because scores from the previous scale are not comparable with the new one.
+- Guarded two latent crash classes: invalid date metadata could throw out of `Intl` and abort a render, and several async handlers could reject unhandled.
+
+## Earlier, in v0.6.2
 
 - Page highlights are much easier to see: a filled pill badge with a border, plus an accent bar and tint on the matched row.
 - Selecting an index depth now enables those date views immediately. Availability followed how far the last pass reached, so choosing 1 month left the 1M view struck through until a refresh.

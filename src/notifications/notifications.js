@@ -20,9 +20,12 @@ function safeUrl(value) {
   return "about:blank";
 }
 
+// Intl throws RangeError on an invalid date; one malformed entry must not stop
+// the whole inbox from rendering.
 function formatDate(value) {
-  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" })
-    .format(new Date(`${value}T12:00:00`));
+  const parsed = new Date(`${value}T12:00:00`);
+  if (!value || Number.isNaN(parsed.getTime())) return "Undated";
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(parsed);
 }
 
 function render(entries) {
@@ -76,9 +79,13 @@ document.querySelector("#screen-now").addEventListener("click", async (event) =>
 
 document.querySelector("#clear-inbox").addEventListener("click", async () => {
   if (!window.confirm("Clear every saved new-paper notification?")) return;
-  await send("CLEAR_NOTIFICATIONS");
-  render([]);
-  status.textContent = "Inbox cleared";
+  try {
+    await send("CLEAR_NOTIFICATIONS");
+    render([]);
+    status.textContent = "Inbox cleared";
+  } catch (error) {
+    status.textContent = error.message;
+  }
 });
 
 load().catch((error) => {

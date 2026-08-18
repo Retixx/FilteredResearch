@@ -1,4 +1,4 @@
-# FilteredResearch v0.6.2 specification
+# FilteredResearch v0.7.0 specification
 
 ## Product contract
 
@@ -38,6 +38,9 @@ The primary user chooses an OpenAlex field/subfield and an index depth in the si
 ### Ranking
 
 - Score novelty against up to 320 older, subfield-adjacent references using the documented TF–IDF/cosine heuristic.
+- Express novelty relative to the field's own crowding rather than as an absolute distance. A paper's nearest-peer similarity and neighbourhood density are compared with the same statistic measured across the field, then mapped through a logistic curve so the score occupies the full 1-100 range instead of bunching near the top.
+- Fall back to a fixed calibration curve when a field has too few peers to describe a distribution.
+- Treat a change of scoring version as invalidating stored scores; a refresh rescores saved papers so one calibration applies across the feed.
 - Score authorship from transparent OpenAlex author metrics and role.
 - Convert selectivity 1–100 into logarithmic target top-fractions using the documented anchors.
 - Apply novelty and authorship percentile cutoffs with AND.
@@ -86,6 +89,7 @@ The primary user chooses an OpenAlex field/subfield and an index depth in the si
 - MV3 only; no remote executable code, eval, telemetry, ads, accounts, or project-owned backend.
 - No tabs, history, cookies, identity, clipboard, scripting, or all-sites permission.
 - Insert all scholarly text with `textContent`, never `innerHTML` except fixed developer-authored skeleton markup.
+- Treat all stored and remote metadata as possibly malformed: invalid dates must not reach `Intl`, and no asynchronous handler or fire-and-forget extension call may reject unhandled.
 - Treat API data and page DOM as untrusted.
 - Publish the privacy policy, accurate Chrome Web Store disclosures, OpenAlex source/terms notice, no-endorsement language, and heuristic limitations.
 - Credit development assistance from OpenAI Codex without implying OpenAI endorsement.

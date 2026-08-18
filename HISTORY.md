@@ -89,6 +89,15 @@
 - Narrowing index depth no longer discards the cache. It re-filters the bundle already held and issues no request; only widening needs a fetch, because the bundle does not yet contain the wider views.
 - Stopped the depth control changing height as its hint appears and disappears.
 
+## v0.7.0 — Field-calibrated novelty and defensive hardening
+
+- Reworked the novelty score so it uses the full 1-100 range. Raw cosine distance is not a meaningful scale on its own: with a wide field vocabulary almost every pair of papers sits at 0.05-0.20 similarity, so "idea-distance" read 80-95% for derivative and groundbreaking work alike and the scores bunched into a narrow band. Measured on identical synthetic papers, the old formula placed every ordinary paper between 79 and 82 with a genuine outlier at 94 — a 12-point spread across the entire field.
+- Novelty is now measured against how crowded the field itself is. A paper's nearest peer and the density of its neighbourhood are compared with the same statistic computed across the field's own papers, then mapped through a logistic curve. On the same test set the quartiles moved from 79/80/81 to 26/53/67, with roughly 45% of papers below 50, derivative work near 0 and genuinely new work near 100.
+- Added a fixed fallback curve for cases with too few peers to describe a field, so small corpora do not invent a distribution.
+- Bumped the scoring version. Scores from the previous scale are not comparable, so a refresh now rescores saved papers in the same batch, which also keeps one consistent calibration across the whole feed.
+- Fixed two latent crash classes found by auditing rather than by reports: `Intl.DateTimeFormat` and `Intl.RelativeTimeFormat` throw `RangeError` on an invalid date, so a single paper with missing or malformed date metadata could take down an entire render. Both are now guarded.
+- Every async click handler catches, and fire-and-forget extension calls (`chrome.tabs.create`, `chrome.runtime.openOptionsPage`, the settings read at startup) no longer become unhandled rejections. Verified by driving all three pages with every backend call failing and every stored record malformed: no uncaught errors, and failures surface as visible messages.
+
 ## Current state
 
-The installed development build is **v0.6.2**. Automated tests at release: **61 passing**.
+The installed development build is **v0.7.0**. Automated tests at release: **67 passing**.
