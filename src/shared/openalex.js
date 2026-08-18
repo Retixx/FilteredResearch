@@ -1,5 +1,10 @@
 const API_ROOT = "https://api.openalex.org";
 
+// Contact address for the polite pool. OpenAlex asks tools to identify
+// themselves so it can reach whoever runs one that misbehaves; it is a
+// project alias, published deliberately, and carries no user data.
+export const CONTACT_EMAIL = "shatteredstudious@gmail.com";
+
 const WORK_FIELDS = [
   "id",
   "doi",
@@ -232,6 +237,12 @@ export class OpenAlexClient {
         url.searchParams.set(key, String(value));
       }
     }
+    // OpenAlex serves identified callers from its polite pool, which is faster
+    // and throttled later than the anonymous pool. Users without their own key
+    // are the ones who would feel that throttling first, so every request
+    // identifies the extension. This is a contact address for the tool, not
+    // anything about the user, and no user data is attached to it.
+    url.searchParams.set("mailto", CONTACT_EMAIL);
     if (this.apiKey) url.searchParams.set("api_key", this.apiKey);
 
     for (let attempt = 0; attempt <= 4; attempt += 1) {

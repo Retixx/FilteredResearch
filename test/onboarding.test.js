@@ -57,3 +57,19 @@ test("usage is reported in requests, not dollars", () => {
   assert.match(optionsScript, /requests\.toLocaleString\(\)/);
   assert.doesNotMatch(optionsScript, /\$\$\{cost\.toFixed/);
 });
+
+test("every request identifies the tool for OpenAlex's polite pool", async () => {
+  const { CONTACT_EMAIL } = await import("../src/shared/openalex.js");
+  // Anonymous traffic is throttled first, and keyless users are the ones who
+  // would feel it, so the contact address is attached whether or not the user
+  // has supplied a key of their own.
+  assert.match(CONTACT_EMAIL, /^[^@\s]+@[^@\s]+\.[a-z]{2,}$/i);
+  assert.match(client, /url\.searchParams\.set\("mailto", CONTACT_EMAIL\);/);
+  const requestBody = client.match(/async request\(endpoint, parameters\)[\s\S]*?for \(let attempt/)?.[0] || "";
+  assert.ok(
+    requestBody.indexOf('"mailto"') < requestBody.indexOf("this.apiKey"),
+    "the tool is identified regardless of whether a user key exists",
+  );
+  // It is a contact for the software, so nothing about the user rides along.
+  assert.doesNotMatch(client, /mailto[^\n]*(settings|user|profile|email\s*\|\|)/i);
+});

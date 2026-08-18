@@ -1,6 +1,6 @@
 {
   "name": "filteredresearch",
-  "version": "0.8.1",
+  "version": "0.8.2",
   "private": true,
   "type": "module",
   "description": "A local-first Chrome extension for finding unusually novel research and papers by established researchers.",

@@ -11,6 +11,7 @@ The primary user chooses an OpenAlex field/subfield and an index depth in the si
 ### Discovery
 
 - Use OpenAlex article/preprint metadata over HTTPS.
+- Identify the extension to OpenAlex with a fixed contact address on every request, so callers land in the polite pool rather than the anonymous one. The address describes the software, is the same for every install, and carries no user data.
 - A focused manual scan uses cursor paging until the API result is exhausted or 1,000,000 unique works are retrieved.
 - Report API total, records downloaded, unique papers after duplicate merging, truncation, coverage percentage, estimated cost, and progress.
 - Coverage percentage is records downloaded over the API total. It is never computed from post-deduplication paper counts, which understated complete passes.

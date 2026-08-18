@@ -133,6 +133,12 @@ Also hardened after a fuzz sweep of every exported function: a record with no ab
 - Stopped reporting usage in dollars. OpenAlex's standard API is free, so a "$0.000 of $1 free daily allowance" figure implied a bill that does not exist and discouraged installs. Usage now reads as a request count; the internal guard that stops a runaway pass is unchanged.
 - Added a test asserting no developer API key can ever be bundled: a key is attached to a request only when the user supplied one, so the publisher can never pay for another person's usage.
 
+## v0.8.2 — Polite-pool identification
+
+- Every OpenAlex request now carries a fixed `mailto` parameter identifying FilteredResearch. OpenAlex serves identified callers from its polite pool, which is faster and throttled later than the anonymous pool. Users without a key of their own are the ones who feel anonymous throttling first, so this matters most for a first run.
+- The address is a project alias, identical for every install, published deliberately, and carries nothing about the user. It is attached whether or not a personal key exists, because it identifies the software rather than the caller.
+- Disclosed in `PRIVACY.md` alongside the existing statement that a user's own key is attached only to OpenAlex requests.
+
 ## Current state
 
-The installed development build is **v0.8.1**. Automated tests at release: **88 passing**.
+The installed development build is **v0.8.2**. Automated tests at release: **89 passing**.
