@@ -59,6 +59,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   siteScreenBudgetUsd: 0.15,
   gapFillBudgetUsd: 0.1,
   showArxivBadges: true,
+  strictInterestFilter: false,
 });
 
 export const INCREMENTAL_MARKERS = Object.freeze([
@@ -164,6 +165,7 @@ export function normalizeSettings(value = {}) {
   merged.maxDiscoveryWorks = Math.max(merged.maxDiscoveryWorks, DEFAULT_SETTINGS.maxDiscoveryWorks);
   merged.fullScanBudgetUsd = Math.max(merged.fullScanBudgetUsd, DEFAULT_SETTINGS.fullScanBudgetUsd);
   merged.showArxivBadges = Boolean(merged.showArxivBadges);
+  merged.strictInterestFilter = Boolean(merged.strictInterestFilter);
   merged.englishOnly = merged.englishOnly !== false;
   merged.notificationsEnabled = Boolean(merged.notificationsEnabled);
   delete merged.selectedCategories;

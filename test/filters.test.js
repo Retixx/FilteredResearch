@@ -45,12 +45,29 @@ test("categories and interests are strict filters joined with AND", () => {
     ),
     false,
   );
+  // Interests no longer exclude the rest of a chosen category: requiring the
+  // phrase verbatim reduced a full subfield index to a handful of papers.
   assert.equal(
     matchesResearchFilters(aiWork, {
       englishOnly: true,
       selectedCategories: ["ai"],
       queries: ["marine archaeology"],
     }),
+    true,
+  );
+  // Strict mode restores the old exclude-everything-else behaviour.
+  assert.equal(
+    matchesResearchFilters(aiWork, {
+      englishOnly: true,
+      selectedCategories: ["ai"],
+      queries: ["marine archaeology"],
+      strictInterestFilter: true,
+    }),
+    false,
+  );
+  // With no category chosen the interest is still the only scope there is.
+  assert.equal(
+    matchesResearchFilters(aiWork, { englishOnly: true, queries: ["marine archaeology"] }),
     false,
   );
 });
@@ -86,9 +103,19 @@ test("AI labels require actual AI evidence instead of trusting a provider catego
   assert.equal(matchesResearchFilters(physics, { englishOnly: true, selectedSubfields: ["1702"], queries: [] }), false);
 });
 
-test("interest phrases match nearby title or abstract terms only", () => {
-  assert.equal(interestMatchEvidence({ title: "Mean-field games", abstract: "Trajectory optimization.", topicName: "Multi-agent system" }, ["multi-agent system"]), null);
+test("interest phrases match title, abstract, or the paper's own topic labels", () => {
+  // A paper filed under the topic counts even when it never repeats the phrase,
+  // which is the point of screening by subfield rather than by wording.
+  assert.equal(
+    interestMatchEvidence({ title: "Mean-field games", abstract: "Trajectory optimization.", topicName: "Multi-agent system" }, ["multi-agent system"])?.location,
+    "topic",
+  );
   assert.equal(interestMatchEvidence({ title: "Coordination", abstract: "We study scalable multi agent systems for planning." }, ["multi-agent system"])?.location, "abstract");
+  // An unrelated topic label still does not match.
+  assert.equal(
+    interestMatchEvidence({ title: "Crop rotation", abstract: "Yields.", topicName: "Agronomy" }, ["multi-agent system"]),
+    null,
+  );
 });
 
 test("changing an interest does not invalidate the discovery scope cache", () => {

@@ -71,6 +71,16 @@
 - The notification page no longer claims to screen at Chrome startup or on an interval, which had not been true since v0.5.1. It reports what a pass found, and a first pass seeds the inbox so a new user can see the feature at all.
 - Reworked side-panel and notification copy to describe what each control does.
 
+## v0.6.1 — Screening scope, coverage honesty, crash fixes
+
+- Fixed the search returning single-digit results. Interest phrases were a hard filter requiring the exact wording in the title or abstract, so a ~6,900-paper index was cut to roughly eighty papers *before* selectivity ran, leaving 8. The chosen categories now decide what is screened and interests rank the results instead of excluding them; a new "Show only papers that state an interest phrase" setting restores the old behaviour.
+- Interest matching also reads the paper's own topic, subfield and field labels, so a paper filed under a topic counts without repeating the phrase verbatim.
+- Fixed discovery itself being keyword-scoped. Each category lane attached the interest phrase as an OpenAlex `search` term, so the local index only ever contained papers repeating that phrase and the rest of the subfield was never retrieved. Category lanes now index the whole scope.
+- Fixed the misleading coverage figure. It compared unique papers *after* duplicate merging against the sum of per-lane record counts, which double-counts overlapping lanes and can never reach 100%; a complete pass reported as low as 70%. Coverage is now measured on records actually downloaded, and the side panel reports unique papers and records separately.
+- Fixed "Cannot set properties of null" on the notification page. `event.currentTarget` is null once an async handler resumes; the same latent fault on the settings page's discovery button is fixed too.
+- Fixed index depth reverting to 1 month. The settings page held a snapshot taken at page load and wrote it back wholesale on save, reverting any depth the side panel had chosen while it was open. It now re-reads the live depth before saving.
+- Corrected settings copy that still claimed a paper must match both a category and an interest phrase.
+
 ## Current state
 
-The installed development build is **v0.6.0**. Automated tests at release: **50 passing**.
+The installed development build is **v0.6.1**. Automated tests at release: **57 passing**.

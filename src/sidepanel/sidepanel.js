@@ -272,7 +272,9 @@ function renderResult(result) {
     );
   } else if (coverage?.fullCompletedAt) {
     showNotice(
-      `Local index: ${compactNumber(coverage.retrieved)} of ${compactNumber(coverage.available)} papers retrieved (${Math.round(coverage.coveragePercent || 0)}% API coverage).`,
+      `Local index: ${compactNumber(coverage.retrieved)} papers from ${compactNumber(coverage.records ?? coverage.retrieved)} records${
+        Math.round(coverage.coveragePercent || 0) >= 99 ? " · complete for this scope" : ` · ${Math.round(coverage.coveragePercent || 0)}% of ${compactNumber(coverage.available)} retrieved`
+      }.`,
       "success",
     );
   } else if (!lastRefresh) {

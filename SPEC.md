@@ -1,4 +1,4 @@
-# FilteredResearch v0.6.0 specification
+# FilteredResearch v0.6.1 specification
 
 ## Product contract
 
@@ -12,7 +12,9 @@ The primary user chooses an OpenAlex field/subfield and an index depth in the si
 
 - Use OpenAlex article/preprint metadata over HTTPS.
 - A focused manual scan uses cursor paging until the API result is exhausted or 1,000,000 unique works are retrieved.
-- Report API total, retrieved count, truncation, coverage percentage, estimated cost, and progress.
+- Report API total, records downloaded, unique papers after duplicate merging, truncation, coverage percentage, estimated cost, and progress.
+- Coverage percentage is records downloaded over the API total. It is never computed from post-deduplication paper counts, which understated complete passes.
+- A category lane carries no keyword; the selected scope is indexed exhaustively so interests can be changed later without re-fetching.
 - Require a user-owned OpenAlex key for exhaustive indexing. Never ship a shared key.
 - Without a key, label the result as a limited preview and retrieve no more than 500 works.
 - If no taxonomy field is selected, use a rotating cross-disciplinary preview rather than claiming exhaustive global coverage.
@@ -28,7 +30,9 @@ The primary user chooses an OpenAlex field/subfield and an index depth in the si
 - Use arXiv's official technical taxonomy internally while displaying clean category names; supplement it with OpenAlex general fields not covered by arXiv.
 - A parent field checkbox means every child subfield. Individual subfields may be selected instead.
 - Normalize taxonomy identifiers from both bare numeric IDs and current OpenAlex URL-shaped IDs.
-- Category and interest-query groups combine with AND; queries inside the interest group combine with OR.
+- A selected category is the filter. Interest queries rank results and do not exclude papers, because requiring exact wording discarded most of an indexed subfield. Enabling strict interest filtering restores the AND behaviour.
+- With no category selected, interest queries are the only scope and do filter.
+- Interest matching considers title, abstract, and the paper's own topic, subfield and field labels; multiple phrases combine with OR.
 - English-only is enabled by default. Missing/non-English metadata is rejected when enabled.
 
 ### Ranking

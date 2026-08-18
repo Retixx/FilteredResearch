@@ -91,6 +91,10 @@ export function interestMatchEvidence(work, queries = []) {
   for (const query of queries.map(String).map((item) => item.trim()).filter(Boolean)) {
     if (matchWindow(work.title, query)) return { query, location: "title", snippet: snippet(work.title, query) };
     if (matchWindow(work.abstract, query)) return { query, location: "abstract", snippet: snippet(work.abstract, query) };
+    const labels = [work.topicName, work.subfieldName, work.fieldName, ...(work.topics || []).map((topic) => topic.topicName)]
+      .filter(Boolean)
+      .join(" ");
+    if (labels && matchWindow(labels, query)) return { query, location: "topic", snippet: labels.slice(0, 190) };
   }
   return null;
 }
@@ -112,7 +116,14 @@ export function matchesResearchFilters(work, settings = {}) {
   if (!exactArxivScope && (selection.fieldIds.length || selection.subfieldIds.length) && !selection.fieldIds.includes(taxonomyId(work.fieldId)) && !selection.subfieldIds.includes(taxonomyId(work.subfieldId))) return false;
   if (!hasCategoryEvidence(work)) return false;
   const queries = Array.isArray(settings.queries) ? settings.queries.map(String).map((query) => query.trim()).filter(Boolean) : [];
-  return !queries.length || Boolean(interestMatchEvidence(work, queries));
+  if (!queries.length) return true;
+  // With a category chosen, that category is the filter and interests only
+  // steer ranking. Strict mode restores the old exclude-everything-else rule.
+  const selection2 = selectionFromSettings(settings);
+  const hasScope = selection2.fieldIds.length || selection2.subfieldIds.length ||
+    (settings.selectedArxivGroups || []).length || (settings.selectedArxivCategories || []).length;
+  if (hasScope && !settings.strictInterestFilter) return true;
+  return Boolean(interestMatchEvidence(work, queries));
 }
 export function discoveryScopeSignature(settings = {}) {
   const selection = selectionFromSettings(settings);

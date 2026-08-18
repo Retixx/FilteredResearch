@@ -57,7 +57,10 @@ async function load() {
 }
 
 document.querySelector("#screen-now").addEventListener("click", async (event) => {
-  event.currentTarget.disabled = true;
+  // currentTarget is null once the handler resumes after an await, so the
+  // button is captured up front.
+  const button = event.currentTarget;
+  button.disabled = true;
   status.textContent = "Running one discovery pass… this uses your OpenAlex allowance.";
   try {
     const result = await send("REFRESH");
@@ -67,7 +70,7 @@ document.querySelector("#screen-now").addEventListener("click", async (event) =>
   } catch (error) {
     status.textContent = error.message;
   } finally {
-    event.currentTarget.disabled = false;
+    button.disabled = false;
   }
 });
 

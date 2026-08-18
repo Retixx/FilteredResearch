@@ -279,15 +279,15 @@ async function fetchDiscovery(client, settings, taxonomy, since, until, mode, wr
   const hasTaxonomySelection = selection.fieldIds.length || selection.subfieldIds.length;
   const laneLimit = mode === "limited" ? settings.broadSample : settings.maxDiscoveryWorks;
   const lanes = [];
+  // A chosen category is indexed exhaustively, with no `search` term attached.
+  // Attaching one made discovery itself keyword-scoped, so the local index only
+  // ever held papers repeating the interest phrase and everything else in the
+  // subfield was never retrieved at all.
   if (selection.fieldIds.length) {
-    for (const query of settings.queries.length ? settings.queries : [""]) {
-      lanes.push({ label: query || "selected fields", fieldIds: selection.fieldIds, subfieldIds: [], query });
-    }
+    lanes.push({ label: "selected fields", fieldIds: selection.fieldIds, subfieldIds: [], query: "" });
   }
   if (selection.subfieldIds.length) {
-    for (const query of settings.queries.length ? settings.queries : [""]) {
-      lanes.push({ label: query || "selected subfields", fieldIds: [], subfieldIds: selection.subfieldIds, query });
-    }
+    lanes.push({ label: "selected subfields", fieldIds: [], subfieldIds: selection.subfieldIds, query: "" });
   }
   if (!hasTaxonomySelection && settings.queries.length) {
     for (const query of settings.queries) {
@@ -343,11 +343,13 @@ async function fetchDiscovery(client, settings, taxonomy, since, until, mode, wr
     pages += result.pages;
     truncated ||= result.truncated;
   }
-  const retrieved = groupDuplicatePapers(deduplicate(allWorks));
+  const uniqueRecords = deduplicate(allWorks);
+  const retrieved = groupDuplicatePapers(uniqueRecords);
   const matched = retrieved.filter((work) => matchesResearchFilters(work, settings));
   return {
     works: matched,
     total,
+    records: uniqueRecords.length,
     retrieved: retrieved.length,
     pages,
     truncated,
@@ -652,9 +654,12 @@ async function performRefresh(reason = "manual") {
           mode,
           available: discovery.total,
           retrieved: discovery.retrieved,
+          records: discovery.records,
           matched: candidates.length,
+          // Measured on records actually downloaded, not on unique papers left
+          // after duplicate merging, which made a complete pass look partial.
           coveragePercent: discovery.total
-            ? Math.min(100, (100 * discovery.retrieved) / discovery.total)
+            ? Math.min(100, (100 * (discovery.records ?? discovery.retrieved)) / discovery.total)
             : 100,
           truncated: discovery.truncated,
           fullCompletedAt: completedAt,
@@ -764,13 +769,30 @@ async function feedContext(settings) {
   };
 }
 
+// Interests no longer exclude anything, so they steer order instead: a paper
+// matching a stated interest outranks an equally-scored one that does not.
+function interestRanked(works, settings) {
+  const queries = (settings.queries || []).filter(Boolean);
+  if (!queries.length) return works;
+  return works.map((work) => ({
+    ...work,
+    interestMatch: interestMatchEvidence(work, queries),
+  }));
+}
+
 function windowSlice(context, settings, { window, sort, includeAll, offset, limit }) {
   const windowConfig = WINDOWS[window] || WINDOWS.week;
   const effectiveDays = Math.min(windowConfig.days, context.indexedHorizonDays);
   const cutoff = daysAgo(effectiveDays);
   const relevant = context.corpus.filter((work) => releasedOn(work) >= cutoff);
   const selected = applySelectivity(relevant, settings, { includeAll });
-  selected.works.sort(SORTERS[sort] || SORTERS.balanced);
+  const ranked = interestRanked(selected.works, settings);
+  const base = SORTERS[sort] || SORTERS.balanced;
+  ranked.sort((left, right) => {
+    const weight = Number(Boolean(right.interestMatch)) - Number(Boolean(left.interestMatch));
+    return weight || base(left, right);
+  });
+  selected.works = ranked;
   const safeOffset = Math.max(0, Number(offset) || 0);
   const safeLimit = Math.min(250, Math.max(1, Number(limit) || 120));
   const page = selected.works.slice(safeOffset, safeOffset + safeLimit).map((work) => ({

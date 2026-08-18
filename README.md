@@ -1,13 +1,20 @@
 # FilteredResearch
 
-FilteredResearch v0.6.0 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
+FilteredResearch v0.6.1 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
 
 - **Novelty**: lexical distance from up to 320 older, field-adjacent OpenAlex papers, adjusted for evidence completeness, rare title phrases, cross-field combinations, and incremental wording.
 - **Authorship**: an established-track-record signal using author h-index, citations, recent citedness, works count, ORCID presence, and authorship role.
 
 Neither score proves scientific novelty, quality, correctness, reputation, or significance. They are screening heuristics for deciding what to inspect next.
 
-## What changed in v0.6.0
+## What changed in v0.6.1
+
+- Search returns real result counts again. Interest phrases were a hard filter demanding the exact wording, which cut a ~6,900-paper index to about eighty before selectivity even ran. Categories now decide what is screened; interests rank the results. Strict phrase filtering is available as a setting.
+- Discovery indexes the whole chosen category. It previously attached your interest phrase as a search term, so the index only ever held papers repeating that phrase.
+- The coverage figure is honest. It had compared unique papers after duplicate merging against summed per-lane record counts, so a complete pass could report 70%.
+- Fixed the notification-page crash, and index depth reverting to 1 month whenever the settings page was saved.
+
+## Earlier, in v0.6.0
 
 - Page highlighting works again and covers far more sites. A v0.5.4 change to the screening response shape was never applied to the arXiv script, so every arXiv badge silently disappeared; the shape is now shared and tested. Coverage extends to ~38 named publishers, repositories and indexes, located by the links a paper row must contain rather than per-site selectors.
 - Highlighting costs nothing anywhere else. Scripts load only on those named hosts, and even there a page with no citation metadata and no paper-shaped link is left completely untouched.

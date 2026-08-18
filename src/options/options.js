@@ -173,6 +173,7 @@ async function populate() {
   document.querySelector("#default-sort").value = settings.defaultSort;
   document.querySelector("#show-arxiv-badges").checked = settings.showArxivBadges;
   document.querySelector("#english-only").checked = settings.englishOnly;
+  document.querySelector("#strict-interest").checked = Boolean(settings.strictInterestFilter);
   document.querySelector("#notifications-enabled").checked = settings.notificationsEnabled;
   document.querySelector("#api-key").value = settings.apiKey;
   renderTaxonomy(settings);
@@ -198,8 +199,12 @@ form.addEventListener("submit", async (event) => {
     document.querySelector("#notifications-enabled").checked = notificationsEnabled;
     const selected = selectedTaxonomy();
     const apiKey = document.querySelector("#api-key").value.trim();
+    // Index depth is owned by the side panel and can change while this page is
+    // open. Re-reading here stops a stale snapshot from reverting it on save.
+    const live = await loadSettings();
     const savedSettings = await saveSettings({
       ...currentSettings,
+      maxTimeframeDays: live.maxTimeframeDays,
       queries: document.querySelector("#queries").value.split("\n").map((value) => value.trim()).filter(Boolean),
       noveltySelectivity: Number(novelty.value),
       authorshipSelectivity: Number(authorship.value),
@@ -211,6 +216,7 @@ form.addEventListener("submit", async (event) => {
       selectedArxivGroups: selected.arxivGroups,
       selectedArxivCategories: selected.arxivCategories,
       englishOnly: document.querySelector("#english-only").checked,
+      strictInterestFilter: document.querySelector("#strict-interest").checked,
       notificationsEnabled,
       apiKey,
     });
@@ -237,8 +243,9 @@ document.querySelector("#rebuild-index").addEventListener("click", async (event)
     status.textContent = "Save your changed filters before rebuilding.";
     return;
   }
-  event.currentTarget.disabled = true;
-  status.textContent = "Rebuilding the index depth selected in the sidebar… keep Chrome open while it runs.";
+  const button = event.currentTarget;
+  button.disabled = true;
+  status.textContent = "Running a discovery pass at the index depth set in the side panel… keep Chrome open.";
   try {
     const result = await send("REBUILD");
     status.textContent = `Indexed ${result.indexedRetrieved} papers; estimated OpenAlex cost $${Number(result.estimatedApiCostUsd || 0).toFixed(3)}.`;
@@ -246,7 +253,7 @@ document.querySelector("#rebuild-index").addEventListener("click", async (event)
   } catch (error) {
     status.textContent = error.message;
   } finally {
-    event.currentTarget.disabled = false;
+    button.disabled = false;
   }
 });
 

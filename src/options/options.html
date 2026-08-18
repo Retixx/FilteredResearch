@@ -1,12 +1,14 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FilteredResearch settings</title><link rel="stylesheet" href="options.css"></head>
-<body><header class="top"><div class="wordmark"><span>FR</span><b>FilteredResearch</b></div><small>SETTINGS · v0.5.4</small></header>
-<main><div class="title"><h1>Research settings</h1><p>Filters are local. New interests reuse papers already in your index.</p></div>
+<body><header class="top"><div class="wordmark"><span>FR</span><b>FilteredResearch</b></div><small>SETTINGS · v0.6.1</small></header>
+<main><div class="title"><h1>Research settings</h1><p>Filters are local. Changing interests re-ranks papers already in your index without fetching anything.</p></div>
 <form id="settings-form">
-  <section><div class="section-head"><h2>Scope</h2><p>A paper must match the selected category and one interest phrase.</p></div>
+  <section><div class="section-head"><h2>Scope</h2><p>The selected categories decide what is screened. Interests rank the results rather than excluding everything else.</p></div>
     <label for="queries">Topics or questions</label><textarea id="queries" rows="4" placeholder="multi-agent systems&#10;mechanistic interpretability"></textarea>
     <p class="hint">Categories below use arXiv's official category codes and names.</p>
     <details class="category-picker"><summary><span id="category-summary">All research</span><span>Choose categories ↓</span></summary><div id="category-options" class="category-options"></div></details>
     <label class="check"><input id="english-only" type="checkbox"> English-language papers only</label>
+    <label class="check"><input id="strict-interest" type="checkbox"> Show only papers that state an interest phrase</label>
+    <p class="hint">Off by default: the selected categories decide what is screened and your interests rank the results. Turn on to also require the phrase in the title, abstract or topic.</p>
   </section>
   <section><div class="section-head"><h2>Acceptance bars</h2><p>Both bars apply. Prominent-source markers bypass authorship only.</p></div>
     <div class="ranges"><label for="novelty-selectivity">Novelty <output id="novelty-selectivity-value">70</output></label><input id="novelty-selectivity" type="range" min="1" max="100"><p id="novelty-guide" class="hint"></p>
