@@ -840,9 +840,10 @@ async function getFeed({
 async function getFeedBundle({ sort = "balanced", limit = 120 } = {}) {
   const settings = await loadSettings();
   const context = await feedContext(settings);
-  // Only the views the saved depth can actually distinguish are built. A wider
-  // view would repeat the widest allowed one while implying it searched further.
-  const available = windowsWithin(context.indexedHorizonDays);
+  // Availability follows the depth the user chose, not how far the last pass
+  // happened to reach. Building only up to the indexed horizon left a depth the
+  // user had just selected showing as unavailable until they refreshed.
+  const available = windowsWithin(context.maxTimeframeDays);
   const windows = Object.fromEntries(
     available.map((window) => [
       window,

@@ -1,4 +1,4 @@
-# FilteredResearch v0.6.1 specification
+# FilteredResearch v0.6.2 specification
 
 ## Product contract
 
@@ -47,6 +47,8 @@ The primary user chooses an OpenAlex field/subfield and an index depth in the si
 
 - Side panel uses past day, 3 days, week, 2 weeks, month, and 3 month tabs.
 - The saved index depth is a hard ceiling on every date view. Views wider than the depth are shown disabled rather than silently repeating the widest allowed view, and the worker reports the depth it applied so the picker can never display a scope the feed did not use.
+- Which views are offered follows the saved depth, not how far the last pass reached. A view inside the depth that has not been indexed yet stays selectable, is marked, and prompts for a refresh.
+- Narrowing the depth re-filters the cached bundle locally and issues no request; only widening fetches, because the cache does not yet hold the wider views.
 - Recency means first public release. An arXiv identifier encodes the month the preprint was submitted; when that precedes the recorded publication month it is used instead, so a preprint later re-published by a journal keeps its true age.
 - Cards show the first-release date and name the later re-publication date rather than presenting old work as new, and list each repository once.
 - One request builds every date view from a single corpus scan, and the side panel serves tab switches from that response. No tab switch issues a message, so switching cannot be delayed by a terminated service worker.

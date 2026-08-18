@@ -1,13 +1,20 @@
 # FilteredResearch
 
-FilteredResearch v0.6.1 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
+FilteredResearch v0.6.2 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
 
 - **Novelty**: lexical distance from up to 320 older, field-adjacent OpenAlex papers, adjusted for evidence completeness, rare title phrases, cross-field combinations, and incremental wording.
 - **Authorship**: an established-track-record signal using author h-index, citations, recent citedness, works count, ORCID presence, and authorship role.
 
 Neither score proves scientific novelty, quality, correctness, reputation, or significance. They are screening heuristics for deciding what to inspect next.
 
-## What changed in v0.6.1
+## What changed in v0.6.2
+
+- Page highlights are much easier to see: a filled pill badge with a border, plus an accent bar and tint on the matched row.
+- Selecting an index depth now enables those date views immediately. Availability followed how far the last pass reached, so choosing 1 month left the 1M view struck through until a refresh.
+- Views inside the depth that a pass has not reached yet are selectable and marked, rather than looking unavailable.
+- Narrowing index depth re-filters the cache locally instead of refetching.
+
+## Earlier, in v0.6.1
 
 - Search returns real result counts again. Interest phrases were a hard filter demanding the exact wording, which cut a ~6,900-paper index to about eighty before selectivity even ran. Categories now decide what is screened; interests rank the results. Strict phrase filtering is available as a setting.
 - Discovery indexes the whole chosen category. It previously attached your interest phrase as a search term, so the index only ever held papers repeating that phrase.

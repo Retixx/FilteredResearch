@@ -605,3 +605,20 @@ a:focus-visible {
   cursor: not-allowed;
   text-decoration: line-through;
 }
+
+/* Inside the chosen depth but not yet reached by a pass: selectable, and marked
+   so it is not mistaken for a view that is unavailable. */
+.window-tabs button.not-indexed::after {
+  content: "";
+  display: block;
+  width: 3px;
+  height: 3px;
+  margin: 2px auto 0;
+  border-radius: 50%;
+  background: var(--warning, #b8860b);
+}
+
+/* The depth hint appears and disappears; reserving its row stops the control
+   from changing height between states. */
+.depth-control { min-height: 34px; }
+.depth-control small { min-width: 0; }

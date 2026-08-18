@@ -81,6 +81,14 @@
 - Fixed index depth reverting to 1 month. The settings page held a snapshot taken at page load and wrote it back wholesale on save, reverting any depth the side panel had chosen while it was open. It now re-reads the live depth before saving.
 - Corrected settings copy that still claimed a paper must match both a category and an interest phrase.
 
+## v0.6.2 — Visible highlights and predictable index depth
+
+- Made page highlights considerably more visible: the badge is now a filled pill at 11px bold with a border and shadow instead of 9px borderless text, and a matched row carries an accent bar and tinted background.
+- Fixed a selected index depth still showing its date views struck through. Availability was derived from how far the last pass happened to reach rather than from the depth the user chose, so picking 1 month left the 1M view disabled until a refresh.
+- Views inside the chosen depth that the last pass has not reached yet are now selectable and carry a small marker, distinct from views genuinely beyond the depth, which remain struck through.
+- Narrowing index depth no longer discards the cache. It re-filters the bundle already held and issues no request; only widening needs a fetch, because the bundle does not yet contain the wider views.
+- Stopped the depth control changing height as its hint appears and disappears.
+
 ## Current state
 
-The installed development build is **v0.6.1**. Automated tests at release: **57 passing**.
+The installed development build is **v0.6.2**. Automated tests at release: **61 passing**.

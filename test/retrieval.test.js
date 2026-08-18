@@ -9,6 +9,10 @@ import { normalizeSettings } from "../src/shared/defaults.js";
 const worker = await readFile(new URL("../src/background/service-worker.js", import.meta.url), "utf8");
 const optionsScript = await readFile(new URL("../src/options/options.js", import.meta.url), "utf8");
 const notificationsScript = await readFile(new URL("../src/notifications/notifications.js", import.meta.url), "utf8");
+const panelSource = await readFile(new URL("../src/sidepanel/sidepanel.js", import.meta.url), "utf8");
+const panelCss = await readFile(new URL("../src/sidepanel/sidepanel.css", import.meta.url), "utf8");
+const siteCss = await readFile(new URL("../src/content/research-sites.css", import.meta.url), "utf8");
+const arxivCss = await readFile(new URL("../src/content/arxiv.css", import.meta.url), "utf8");
 
 const AI_SCOPE = {
   englishOnly: true,
@@ -125,4 +129,42 @@ test("saving settings cannot revert the side panel's index depth", () => {
   // The form held a snapshot from page load and wrote it back wholesale.
   assert.match(optionsScript, /const live = await loadSettings\(\);/);
   assert.match(optionsScript, /maxTimeframeDays: live\.maxTimeframeDays/);
+});
+
+test("selecting an index depth makes those views available immediately", () => {
+  // Availability was derived from how far the last pass reached, so a depth the
+  // user had just chosen still showed its views struck through until a refresh.
+  assert.match(worker, /const available = windowsWithin\(context\.maxTimeframeDays\);/);
+  assert.doesNotMatch(worker, /windowsWithin\(context\.indexedHorizonDays\)/);
+});
+
+test("a view inside the depth but not yet indexed is marked, not disabled", () => {
+  const panelScript = panelSource;
+  assert.match(panelScript, /const unindexed = usable && days > indexed;/);
+  assert.match(panelScript, /tab\.classList\.toggle\("not-indexed", unindexed\);/);
+  // Only genuinely out-of-depth views are disabled or struck through.
+  assert.match(panelScript, /tab\.disabled = !usable;/);
+  assert.match(panelCss, /button\.out-of-depth/);
+  assert.match(panelCss, /button\.not-indexed::after/);
+});
+
+test("narrowing index depth re-filters the cache instead of refetching", () => {
+  const handler = panelSource.match(/elements\.maxTimeframe\.addEventListener[\s\S]*?\n\}\);/)?.[0] || "";
+  assert.match(handler, /const narrowing = state\.bundle && state\.maxTimeframeDays <= previousDepth;/);
+  assert.ok(
+    handler.indexOf("if (narrowing)") < handler.indexOf("state.bundle = null;"),
+    "the narrowing path must return before the cache is dropped",
+  );
+  assert.match(handler, /renderResult\(state\.bundle\[state\.window\]/);
+});
+
+test("page highlights are large enough to notice", () => {
+  // The badge was 9px with no fill, which was easy to miss entirely.
+  const size = (css) => Number(css.match(/font:\s*\d+\s+(\d+)px/)?.[1] || 0);
+  assert.ok(size(siteCss) >= 11, `site badge font too small: ${size(siteCss)}px`);
+  assert.ok(size(arxivCss) >= 11, `arxiv badge font too small: ${size(arxivCss)}px`);
+  for (const css of [siteCss, arxivCss]) {
+    assert.match(css, /border-radius:\s*999px/);
+    assert.match(css, /background:\s*color-mix/);
+  }
 });

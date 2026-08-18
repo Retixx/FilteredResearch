@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, WINDOWS } from "../shared/defaults.js";
+import { DEFAULT_SETTINGS, WINDOWS, windowsWithin } from "../shared/defaults.js";
 
 const state = {
   window: DEFAULT_SETTINGS.defaultWindow,
@@ -12,6 +12,7 @@ const state = {
   bundle: null,
   bundleSort: null,
   availableWindows: null,
+  indexedHorizonDays: null,
 };
 
 const BATCH_SIZE = 60;
@@ -215,13 +216,21 @@ function updateControls() {
   // view does not already show, so they are disabled rather than silently
   // repeating it.
   const allowed = state.availableWindows;
+  const indexed = Number(state.indexedHorizonDays || state.maxTimeframeDays);
   for (const tab of elements.tabs) {
+    const days = WINDOWS[tab.dataset.window]?.days || 0;
     const usable = !allowed || allowed.includes(tab.dataset.window);
+    const unindexed = usable && days > indexed;
     const active = tab.dataset.window === state.window;
     tab.classList.toggle("active", active && usable);
     tab.classList.toggle("out-of-depth", !usable);
+    tab.classList.toggle("not-indexed", unindexed);
     tab.disabled = !usable;
-    tab.title = usable ? "" : `Raise Index depth past ${WINDOWS[tab.dataset.window]?.label?.toLowerCase() || "this range"} to search this far back`;
+    tab.title = !usable
+      ? `Raise Index depth past ${WINDOWS[tab.dataset.window]?.label?.toLowerCase() || "this range"} to search this far back`
+      : unindexed
+        ? "Within your index depth, but the last pass has not reached this far back yet. Press refresh to index it."
+        : "";
     tab.setAttribute("aria-selected", String(active && usable));
   }
   elements.sort.value = state.sort;
@@ -298,6 +307,7 @@ async function loadFeed({ skeleton = true } = {}) {
     state.bundle = bundle.windows;
     state.bundleSort = bundle.sort;
     state.availableWindows = bundle.availableWindows || Object.keys(bundle.windows);
+    state.indexedHorizonDays = Number(bundle.indexedHorizonDays) || null;
     // The worker is the single source of truth for depth. Reading it back here
     // keeps the picker from ever displaying a scope the feed did not apply.
     if (Number.isFinite(Number(bundle.maxTimeframeDays))) {
@@ -421,15 +431,25 @@ elements.maxTimeframe.addEventListener("change", async () => {
   const days = Number(elements.maxTimeframe.value);
   elements.maxTimeframe.disabled = true;
   try {
+    const previousDepth = state.maxTimeframeDays;
     const result = await send("SET_MAX_TIMEFRAME", { days });
     state.maxTimeframeDays = result.maxTimeframeDays;
-    // Depth bounds every window, so the cached bundle no longer describes the feed.
-    state.bundle = null;
     if ((WINDOWS[state.window]?.days || 7) > state.maxTimeframeDays) {
       state.window = widestWindowWithin(state.maxTimeframeDays);
     }
+    // Narrowing only removes views the cached bundle already holds, so it is a
+    // local re-render. Widening needs windows the bundle does not contain yet.
+    const narrowing = state.bundle && state.maxTimeframeDays <= previousDepth;
+    if (narrowing) {
+      state.availableWindows = windowsWithin(state.maxTimeframeDays);
+      updateControls();
+      renderResult(state.bundle[state.window] || Object.values(state.bundle)[0]);
+      showNotice("Index depth narrowed. Saved papers were re-filtered locally; nothing was fetched.", "success");
+      return;
+    }
+    state.bundle = null;
     await loadFeed({ skeleton: false });
-    showNotice("Index depth saved locally. Press refresh when you want to run discovery; no API request was made.", "success");
+    showNotice("Index depth saved. Press refresh when you want a pass that reaches this far back; no API request was made.", "success");
   } catch (error) { showNotice(error.message, "error"); }
   finally { elements.maxTimeframe.disabled = false; }
 });
