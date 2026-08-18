@@ -125,6 +125,14 @@ Also hardened after a fuzz sweep of every exported function: a record with no ab
 - Removed page highlighting entirely, along with both content scripts, their styles, the settings toggle, four message handlers and the `export.arxiv.org` host permission. The extension now declares no content script at all, so ordinary browsing never runs extension code and there are no interruptions while scrolling. Privacy and compliance documents were updated to match.
 - Replaced the "FR" lettering in the side panel, settings and inbox headers with the book mark.
 
+## v0.8.1 — A first run that works without a key
+
+- Reframed the keyless experience. The empty state demanded an OpenAlex key before the extension did anything, and a completed keyless pass reported itself as a "Limited preview". Both now lead with what the pass found and mention a free key as an upgrade rather than a prerequisite.
+- Doubled the keyless sample from 500 to 1,000 works. That is ten requests per pass instead of five, a trivial load, and it makes a first run read as a real result.
+- Presented the key as optional and free in Settings, with an "optional · free" tag beside the field.
+- Stopped reporting usage in dollars. OpenAlex's standard API is free, so a "$0.000 of $1 free daily allowance" figure implied a bill that does not exist and discouraged installs. Usage now reads as a request count; the internal guard that stops a runaway pass is unchanged.
+- Added a test asserting no developer API key can ever be bundled: a key is attached to a request only when the user supplied one, so the publisher can never pay for another person's usage.
+
 ## Current state
 
-The installed development build is **v0.8.0**. Automated tests at release: **83 passing**.
+The installed development build is **v0.8.1**. Automated tests at release: **88 passing**.

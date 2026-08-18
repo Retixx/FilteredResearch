@@ -16,7 +16,7 @@ The primary user chooses an OpenAlex field/subfield and an index depth in the si
 - Coverage percentage is records downloaded over the API total. It is never computed from post-deduplication paper counts, which understated complete passes.
 - A category lane carries no keyword; the selected scope is indexed exhaustively so interests can be changed later without re-fetching.
 - Require a user-owned OpenAlex key for exhaustive indexing. Never ship a shared key.
-- Without a key, label the result as a limited preview and retrieve no more than 500 works.
+- Without a key, retrieve up to 1,000 works and present the result as a working sample, naming a free key as the way to remove the limit. Never bundle a developer key: a key reaches OpenAlex only when the user supplied it, so the publisher can never fund another person's usage.
 - If no taxonomy field is selected, use a rotating cross-disciplinary preview rather than claiming exhaustive global coverage.
 - Install, settings saves, and depth changes make no discovery requests. Startup makes one only when automatic scanning is enabled and its interval has elapsed. Group records by normalized title plus author identity even across different DOIs and preserve up to one year locally.
 - A stored index depth beyond the supported ceiling migrates onto the nearest supported depth instead of being rejected.

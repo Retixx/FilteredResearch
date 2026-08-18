@@ -13,10 +13,15 @@ let taxonomy = [];
 let formDirty = false;
 
 function renderUsage(usage = {}) {
+  // OpenAlex's standard API is free, so requests are the honest unit here. The
+  // internal budget guard still exists to stop a runaway pass.
+  const requests = Math.max(0, Number(usage.requests || 0));
   const cost = Math.max(0, Number(usage.costUsd || 0));
-  document.querySelector("#usage-cost").textContent = `$${cost.toFixed(3)}`;
+  document.querySelector("#usage-cost").textContent = requests.toLocaleString();
   document.querySelector("#usage-bar").style.width = `${Math.min(100, cost * 100)}%`;
-  document.querySelector("#usage-detail").textContent = `${Number(usage.requests || 0)} requests recorded today${usage.hasEstimatedCalls ? " · includes estimates" : " · provider-reported where available"}. Resets at midnight UTC.`;
+  document.querySelector("#usage-detail").textContent = requests
+    ? `Recorded in this browser only${usage.hasEstimatedCalls ? " · includes estimates" : ""}. Resets at midnight UTC.`
+    : "No calls recorded today.";
 }
 
 function applySavedConfig(saved) {

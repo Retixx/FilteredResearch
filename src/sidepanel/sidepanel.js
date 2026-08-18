@@ -285,7 +285,7 @@ function renderResult(result) {
     showNotice(result.stats.refreshState.message, "error");
   } else if (coverage?.needsApiKey) {
     showNotice(
-      `Limited preview: ${compactNumber(coverage.limitedRetrieved || 0)} of ${compactNumber(coverage.limitedAvailable || 0)} available papers checked. Add your personal OpenAlex key in settings for complete coverage.`,
+      `Screened ${compactNumber(coverage.limitedRetrieved || 0)} recent papers without a key. A free OpenAlex key raises this to every paper in your scope — add one in settings.`,
     );
   } else if (coverage?.fullCompletedAt) {
     showNotice(
@@ -295,7 +295,7 @@ function renderResult(result) {
       "success",
     );
   } else if (!lastRefresh) {
-    showNotice("No pass has run yet. Without your own OpenAlex key this stays a small preview; add one in settings for full coverage.");
+    showNotice("Pick a category in settings, then press refresh. No API key is needed to start — add a free one later for full coverage.");
   } else {
     showNotice("");
   }
