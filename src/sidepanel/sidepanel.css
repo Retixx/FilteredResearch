@@ -170,7 +170,11 @@ a:focus-visible {
 }
 
 .window-tabs button {
-  flex: 0 0 42px;
+  /* Six fixed-width tabs overflowed a narrow side panel, which produced a
+     scrollbar under the row and clipped the last tab. They share the space
+     instead, and the scroll fallback only applies at extreme narrowness. */
+  flex: 1 1 0;
+  min-width: 30px;
   min-height: 42px;
   border: 0;
   border-right: 1px solid var(--line);

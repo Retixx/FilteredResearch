@@ -246,7 +246,6 @@ function updateControls() {
     tab.setAttribute("aria-selected", String(active && usable));
   }
   elements.sort.value = state.sort;
-  elements.summaryCopy.textContent = state.resultCount === 1 ? "paper cleared both bars" : "papers cleared both bars";
 }
 
 function showNotice(message, tone = "info") {
@@ -263,6 +262,8 @@ function renderResult(result) {
   state.renderedCount = 0;
   renderNextBatch();
   elements.resultCount.textContent = String(result.resultCount);
+  elements.summaryCopy.textContent =
+    result.resultCount === 1 ? "paper cleared both bars" : "papers cleared both bars";
   updateNotificationBadge(result.stats.unreadNotifications);
   const refreshState = result.stats.refreshState;
   const discoveryRunning = refreshState?.status === "running";

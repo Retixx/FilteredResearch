@@ -139,6 +139,15 @@ Also hardened after a fuzz sweep of every exported function: a record with no ab
 - The address is a project alias, identical for every install, published deliberately, and carries nothing about the user. It is attached whether or not a personal key exists, because it identifies the software rather than the caller.
 - Disclosed in `PRIVACY.md` alongside the existing statement that a user's own key is attached only to OpenAlex requests.
 
+## v1.0.0 — First public release
+
+Release readiness pass over the whole extension.
+
+- Fixed two interface faults visible in the release screenshots. The date-view row used six fixed-width tabs, which overflowed a narrow side panel, drew a scrollbar under the row and clipped the last tab; the tabs now share the available width. The result label was computed before the new count was known, so it rendered one state behind and read "1 papers cleared both bars"; it now follows the count actually rendered.
+- Made scoring roughly twice as fast. Crowding compared every candidate with every peer, about two million cosine computations on a full rescore, nearly all between papers sharing no vocabulary. Peers are now indexed by term once per group, so a candidate touches only peers that share a term with it. Measured on 6,000 candidates against 1,200 references: 16.6 s to 8.9 s.
+- Verified that optimisation changes nothing: crowding and nearest-peer similarity agree with a naive pairwise implementation to within 8.3e-17, and a test now fails if the two ever diverge.
+- Audited what leaves the machine. The extension makes exactly two kinds of outbound request, to the OpenAlex API and to arXiv's public taxonomy page, both matching declared host permissions. There is no beacon, no XHR, no WebSocket, no cookie or localStorage use, and no analytics. Only a fixed contact address and, when the user has supplied one, their own key are attached.
+
 ## Current state
 
-The installed development build is **v0.8.2**. Automated tests at release: **89 passing**.
+The released build is **v1.0.0**. Automated tests at release: **90 passing**.

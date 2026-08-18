@@ -109,3 +109,42 @@ test("no async click handler can reject unhandled", () => {
   assert.match(panelScript, /Promise\.resolve\(chrome\.runtime\.openOptionsPage/);
   assert.match(panelScript, /\.catch\(\(error\) => \{[\s\S]*?Could not read saved settings/);
 });
+
+test("the indexed similarity search matches a naive pairwise implementation", async () => {
+  // Crowding is computed through a term posting list rather than by comparing
+  // every candidate with every peer. That is an optimisation, so it has to
+  // produce the same numbers, not merely similar ones.
+  const { buildVector, cosineSimilarity, scoreBatch: score } = await import("../src/shared/scoring.js");
+  let s = 99;
+  const rnd = () => { s = (Math.imul(s, 1664525) + 1013904223) >>> 0; return s / 4294967296; };
+  const vocab = Array.from({ length: 600 }, (_, i) => `w${i}`);
+  const words = (n) => Array.from({ length: n }, () => vocab[Math.floor(rnd() * vocab.length)]).join(" ");
+  const mk = (id, date) => ({
+    id, title: words(8), abstract: words(100),
+    subfieldId: "1702", domainId: "1", publicationDate: date, authorships: [], topics: [{ fieldId: "17" }],
+  });
+  const references = Array.from({ length: 120 }, (_, i) => mk(`R${i}`, "2024-01-01"));
+  const candidates = Array.from({ length: 60 }, (_, i) => mk(`C${i}`, "2026-01-01"));
+  const scored = score(candidates, references, []);
+
+  const all = [...references, ...candidates];
+  const df = new Map();
+  for (const w of all) {
+    for (const t of new Set(`${w.title} ${w.abstract}`.toLowerCase().match(/[a-z][a-z0-9-]{2,}/g) || [])) {
+      df.set(t, (df.get(t) || 0) + 1);
+    }
+  }
+  const idf = new Map([...df].map(([t, f]) => [t, Math.log((all.length + 1) / (f + 1)) + 1]));
+  const vectors = new Map(all.map((w) => [w.id, buildVector(`${w.title} ${w.abstract}`, idf)]));
+  const peerVectors = references.map((r) => vectors.get(r.id));
+
+  for (const work of scored) {
+    const sims = peerVectors.map((peer) => cosineSimilarity(vectors.get(work.id), peer));
+    const nearest = Math.max(...sims);
+    const top = [...sims].sort((a, b) => b - a).slice(0, 5);
+    const expected = 0.65 * nearest + 0.35 * (top.reduce((a, b) => a + b, 0) / top.length);
+    assert.ok(Math.abs(expected - work.noveltyEvidence.crowding) < 1e-9,
+      `crowding drifted for ${work.id}: ${expected} vs ${work.noveltyEvidence.crowding}`);
+    assert.ok(Math.abs(nearest - work.nearestSimilarity) < 1e-9, `nearest drifted for ${work.id}`);
+  }
+});

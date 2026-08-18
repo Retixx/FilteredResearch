@@ -1,13 +1,19 @@
 # FilteredResearch
 
-FilteredResearch v0.8.2 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
+FilteredResearch v1.0.0 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
 
 - **Novelty**: lexical distance from up to 320 older, field-adjacent OpenAlex papers, adjusted for evidence completeness, rare title phrases, cross-field combinations, and incremental wording.
 - **Authorship**: an established-track-record signal using author h-index, citations, recent citedness, works count, ORCID presence, and authorship role.
 
 Neither score proves scientific novelty, quality, correctness, reputation, or significance. They are screening heuristics for deciding what to inspect next.
 
-## What changed in v0.8.2
+## What changed in v1.0.0
+
+- First public release.
+- Scoring is about twice as fast: peers are indexed by term, so a candidate is compared only with peers that share vocabulary with it. Verified to produce identical scores.
+- Fixed the date-view tabs overflowing a narrow side panel, and a result label that rendered one state behind.
+
+## Earlier, in v0.8.2
 
 - Requests identify the extension to OpenAlex so they are served from the polite pool, which is faster and throttled later. This mainly helps people who have not added a key of their own.
 

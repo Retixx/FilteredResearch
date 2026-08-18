@@ -69,22 +69,58 @@ function median(values) {
   return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
 
+// Term -> flat [peerIndex, weight, peerIndex, weight, ...]. Comparing every
+// candidate against every peer meant roughly two million cosine computations on
+// a full rescore, almost all of them between papers sharing no vocabulary at
+// all. Indexing the peers once lets a candidate touch only the peers that
+// actually share a term with it.
+function buildPeerPostings(peerVectors) {
+  const postings = new Map();
+  for (let index = 0; index < peerVectors.length; index += 1) {
+    const peer = peerVectors[index];
+    if (!peer?.vector) continue;
+    for (const [term, weight] of peer.vector) {
+      let list = postings.get(term);
+      if (!list) postings.set(term, (list = []));
+      list.push(index, weight);
+    }
+  }
+  return postings;
+}
+
 // How close a paper sits to the work that already exists: its nearest peer plus
 // the density of the neighbourhood, so one coincidental match cannot alone make
 // a paper look derivative.
-function crowdingOf(vector, peerVectors) {
+function crowdingOf(vector, peerVectors, postings = null, excludeIndex = -1) {
   if (!peerVectors.length) return { crowding: 0, nearestIndex: -1, nearestSimilarity: 0 };
+  const index = postings || buildPeerPostings(peerVectors);
+  const dots = new Float64Array(peerVectors.length);
+  if (vector?.vector && vector.norm) {
+    for (const [term, weight] of vector.vector) {
+      const list = index.get(term);
+      if (!list) continue;
+      for (let position = 0; position < list.length; position += 2) {
+        dots[list[position]] += weight * list[position + 1];
+      }
+    }
+  }
+
   const similarities = [];
   let nearestSimilarity = 0;
   let nearestIndex = -1;
-  for (let index = 0; index < peerVectors.length; index += 1) {
-    const similarity = cosineSimilarity(vector, peerVectors[index]);
+  for (let peer = 0; peer < peerVectors.length; peer += 1) {
+    if (peer === excludeIndex) continue;
+    const peerNorm = peerVectors[peer]?.norm || 0;
+    const similarity = peerNorm && vector?.norm
+      ? clamp(dots[peer] / (vector.norm * peerNorm), 0, 1)
+      : 0;
     similarities.push(similarity);
     if (similarity > nearestSimilarity) {
       nearestSimilarity = similarity;
-      nearestIndex = index;
+      nearestIndex = peer;
     }
   }
+  if (!similarities.length) return { crowding: 0, nearestIndex: -1, nearestSimilarity: 0 };
   similarities.sort((left, right) => right - left);
   const topFive = similarities.slice(0, 5);
   const neighbourhood = topFive.reduce((sum, value) => sum + value, 0) / topFive.length;
@@ -94,13 +130,14 @@ function crowdingOf(vector, peerVectors) {
 // The field's own crowding distribution, measured by treating sampled peers as
 // candidates against the rest. Computed once per peer group and reused.
 const PEER_STATS_SAMPLE = 90;
-function peerFieldStats(peers, peerVectors, idf) {
+function peerFieldStats(peers, peerVectors, idf, postings = null) {
   const step = Math.max(1, Math.floor(peerVectors.length / PEER_STATS_SAMPLE));
+  const peerPostings = postings || buildPeerPostings(peerVectors);
   const crowdings = [];
   const distinctions = [];
   for (let index = 0; index < peerVectors.length && crowdings.length < PEER_STATS_SAMPLE; index += step) {
-    const others = peerVectors.filter((_, position) => position !== index);
-    crowdings.push(crowdingOf(peerVectors[index], others).crowding);
+    // Excluding by position avoids rebuilding a 300-element array per sample.
+    crowdings.push(crowdingOf(peerVectors[index], peerVectors, peerPostings, index).crowding);
     const peer = peers[index];
     if (peer) distinctions.push(distinctivenessOf(`${peer.title || ""} ${peer.abstract || ""}`, idf));
   }
@@ -364,6 +401,7 @@ export function scoreBatch(candidates, references, authors, options = {}) {
   // as well as against past work. Ranking against peers alone left every
   // candidate beyond the top of the peer range and therefore tied.
   const statsByGroup = new Map();
+  const postingsByGroup = new Map();
   const measured = candidates.map((work) => {
     const { peers, groupKey } = choosePeers(
       work,
@@ -373,8 +411,15 @@ export function scoreBatch(candidates, references, authors, options = {}) {
     );
     const candidateVector = vectors.get(work.id) || buildVector(`${work.title || ""} ${work.abstract || ""}`, idf);
     const peerVectors = peers.map((peer) => vectors.get(peer.id)).filter(Boolean);
-    const measure = crowdingOf(candidateVector, peerVectors);
-    if (!statsByGroup.has(groupKey)) statsByGroup.set(groupKey, peerFieldStats(peers, peerVectors, idf));
+    // The posting list is per peer group, so it is built once and reused by
+    // every candidate scored against that group.
+    let postings = postingsByGroup.get(groupKey);
+    if (!postings) {
+      postings = buildPeerPostings(peerVectors);
+      postingsByGroup.set(groupKey, postings);
+    }
+    const measure = crowdingOf(candidateVector, peerVectors, postings);
+    if (!statsByGroup.has(groupKey)) statsByGroup.set(groupKey, peerFieldStats(peers, peerVectors, idf, postings));
     return {
       work,
       peers,
