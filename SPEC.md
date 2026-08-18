@@ -1,4 +1,4 @@
-# FilteredResearch v0.7.0 specification
+# FilteredResearch v0.7.1 specification
 
 ## Product contract
 
@@ -21,6 +21,7 @@ The primary user chooses an OpenAlex field/subfield and an index depth in the si
 - Install, startup, settings saves, and depth changes make no discovery requests. Group records by normalized title plus author identity even across different DOIs and preserve up to one year locally.
 - A stored index depth beyond the supported ceiling migrates onto the nearest supported depth instead of being rejected.
 - Full discovery runs only after explicit user action and the prior saved feed remains available until completion.
+- A pass is started without holding a message channel open, because it runs longer than a Manifest V3 service worker is guaranteed to live. Callers watch the progress state the worker persists, which also keeps the worker alive; a dropped poll never aborts the watch, and a pass that stops advancing is reported rather than awaited forever.
 - Enforce a $0.95 full-pass guard by estimated OpenAlex request costs; show locally recorded daily usage in Settings.
 - Retrieval is hybrid. The feed renders from the local index first, then a bounded gap fill retrieves what the last pass missed for the current window only, under its own budget and rate-limited per scope, so it never turns a render into a network wait.
 

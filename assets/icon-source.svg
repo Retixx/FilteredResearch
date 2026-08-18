@@ -1,9 +1,20 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="FilteredResearch FR mark">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="FilteredResearch FR book mark">
   <rect width="1024" height="1024" fill="#fbfcfb"/>
-  <path d="M190 116H756Q884 116 884 244V770Q884 908 746 908H254Q116 908 116 770V254Q116 116 254 116Z" fill="#fbfcfb" stroke="#111311" stroke-width="28"/>
-  <path d="M294 238H696Q790 238 790 332V718Q790 806 702 806H320Q232 806 232 718V326Q232 238 320 238Z" fill="#a6d2ca"/>
-  <path d="M76 302H430" fill="none" stroke="#477c73" stroke-width="24"/>
-  <path d="M746 662V950" fill="none" stroke="#477c73" stroke-width="24"/>
-  <path d="M342 674V362H508M342 506H478" fill="none" stroke="#111311" stroke-linecap="square" stroke-linejoin="miter" stroke-width="52"/>
-  <path d="M558 674V362H654Q734 362 734 442Q734 522 654 522H558M650 522L742 674" fill="none" stroke="#111311" stroke-linecap="square" stroke-linejoin="miter" stroke-width="52"/>
+
+  <!-- Back cover, offset down and right so the book has depth. -->
+  <rect x="176" y="206" width="716" height="700" rx="76" fill="#477c73" stroke="#111311" stroke-width="26"/>
+  <!-- Page block peeking out between the covers. -->
+  <rect x="150" y="176" width="716" height="700" rx="76" fill="#e6efed" stroke="#111311" stroke-width="26"/>
+  <!-- Front cover. -->
+  <rect x="124" y="146" width="716" height="700" rx="76" fill="#fbfcfb" stroke="#111311" stroke-width="26"/>
+
+  <!-- Spine fold and its two binding bands. -->
+  <path d="M232 172V820" fill="none" stroke="#477c73" stroke-width="20"/>
+  <path d="M150 300H232M150 692H232" fill="none" stroke="#111311" stroke-width="18"/>
+
+  <!-- Opal panel carrying the FR monogram. -->
+  <rect x="292" y="232" width="500" height="528" rx="44" fill="#a6d2ca"/>
+
+  <path d="M372 656V352H528M372 492H500" fill="none" stroke="#111311" stroke-linecap="square" stroke-linejoin="miter" stroke-width="52"/>
+  <path d="M578 656V352H668Q744 352 744 428Q744 504 668 504H578M664 504L750 656" fill="none" stroke="#111311" stroke-linecap="square" stroke-linejoin="miter" stroke-width="52"/>
 </svg>

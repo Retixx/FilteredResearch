@@ -1,5 +1,6 @@
 import { loadSettings, saveSettings } from "../shared/defaults.js";
 import { describeSelectivity } from "../shared/ranking.js";
+import { describeProgress, runRefresh } from "../shared/refresh-progress.js";
 
 const form = document.querySelector("#settings-form");
 const status = document.querySelector("#save-status");
@@ -247,8 +248,14 @@ document.querySelector("#rebuild-index").addEventListener("click", async (event)
   button.disabled = true;
   status.textContent = "Running a discovery pass at the index depth set in the side panel… keep Chrome open.";
   try {
-    const result = await send("REBUILD");
-    status.textContent = `Indexed ${result.indexedRetrieved} papers; estimated OpenAlex cost $${Number(result.estimatedApiCostUsd || 0).toFixed(3)}.`;
+    const result = await runRefresh(send, {
+      reason: "rebuild",
+      onProgress: (state) => {
+        const detail = describeProgress(state);
+        if (detail) status.textContent = `Running · ${detail}`;
+      },
+    });
+    status.textContent = `Indexed ${Number(result.indexedRetrieved || 0).toLocaleString()} papers; estimated OpenAlex cost $${Number(result.estimatedApiCostUsd || 0).toFixed(3)}.`;
     renderUsage(await send("GET_API_USAGE")); renderHistory(await send("GET_SEARCH_HISTORY"));
   } catch (error) {
     status.textContent = error.message;

@@ -1,13 +1,18 @@
 # FilteredResearch
 
-FilteredResearch v0.7.0 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
+FilteredResearch v0.7.1 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
 
 - **Novelty**: lexical distance from up to 320 older, field-adjacent OpenAlex papers, adjusted for evidence completeness, rare title phrases, cross-field combinations, and incremental wording.
 - **Authorship**: an established-track-record signal using author h-index, citations, recent citedness, works count, ORCID presence, and authorship role.
 
 Neither score proves scientific novelty, quality, correctness, reputation, or significance. They are screening heuristics for deciding what to inspect next.
 
-## What changed in v0.7.0
+## What changed in v0.7.1
+
+- Fixed the "message channel closed before a response was received" error during a discovery pass. A pass outlives the service worker's guaranteed lifetime, so it is now started without holding the channel open and watched through persisted progress state, with live phase and counts shown while it runs.
+- The icon is now a book: front cover with the FR monogram, page block and back cover behind it, and a spine fold.
+
+## Earlier, in v0.7.0
 
 - Novelty now uses the full 1-100 range. It is measured against how crowded the field itself is rather than against raw cosine distance, which in a wide vocabulary reads 80-95% "distant" for derivative and groundbreaking work alike. On identical test papers the old formula put every ordinary paper between 79 and 82; the new one spreads them across 26/53/67 at the quartiles with derivative work near 0 and genuinely new work near 100.
 - A refresh rescores saved papers, because scores from the previous scale are not comparable with the new one.

@@ -1,3 +1,5 @@
+import { describeProgress, runRefresh } from "../shared/refresh-progress.js";
+
 const inbox = document.querySelector("#inbox");
 const empty = document.querySelector("#empty");
 const count = document.querySelector("#paper-count");
@@ -66,10 +68,15 @@ document.querySelector("#screen-now").addEventListener("click", async (event) =>
   button.disabled = true;
   status.textContent = "Running one discovery pass… this uses your OpenAlex allowance.";
   try {
-    const result = await send("REFRESH");
+    const result = await runRefresh(send, {
+      onProgress: (state) => {
+        const detail = describeProgress(state);
+        if (detail) status.textContent = `Screening · ${detail}`;
+      },
+    });
     // load() rewrites the status line, so the pass result is reported after it.
     await load();
-    status.textContent = `Screened ${result.candidatesFetched} papers · ${result.notificationsGenerated || 0} new here`;
+    status.textContent = `Screened ${Number(result.candidatesFetched || 0).toLocaleString()} papers · ${result.notificationsGenerated || 0} new here`;
   } catch (error) {
     status.textContent = error.message;
   } finally {

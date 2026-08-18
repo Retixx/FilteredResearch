@@ -98,6 +98,14 @@
 - Fixed two latent crash classes found by auditing rather than by reports: `Intl.DateTimeFormat` and `Intl.RelativeTimeFormat` throw `RangeError` on an invalid date, so a single paper with missing or malformed date metadata could take down an entire render. Both are now guarded.
 - Every async click handler catches, and fire-and-forget extension calls (`chrome.tabs.create`, `chrome.runtime.openOptionsPage`, the settings read at startup) no longer become unhandled rejections. Verified by driving all three pages with every backend call failing and every stored record malformed: no uncaught errors, and failures surface as visible messages.
 
+## v0.7.1 — Passes that outlive the worker, and a book mark
+
+- Fixed "a listener indicated an asynchronous response by returning true, but the message channel closed before a response was received". A discovery pass was awaited inside the message listener, but it runs far longer than a Manifest V3 service worker is guaranteed to live, so the worker was torn down mid-pass and the channel closed before a reply. v0.7.0 made this much more likely by adding exhaustive scope indexing and rescoring of saved papers.
+- A pass is now started as fire-and-forget and watched through the progress state the worker already persists. The side panel, notification page and settings page all show live progress — phase, lane and counts — instead of sitting on one long request, and each poll also keeps the worker alive.
+- A dropped poll no longer aborts the watch, a pass that stops advancing is reported rather than hanging forever, and a failed pass surfaces its reason.
+- Reported the pass result after the feed reload rather than before it, so the summary is no longer immediately overwritten.
+- Redrew the icon as a book: a front cover carrying the FR monogram, a page block and back cover offset behind it, and a spine fold with binding bands. Regenerated at 16, 32, 48 and 128 pixels.
+
 ## Current state
 
-The installed development build is **v0.7.0**. Automated tests at release: **67 passing**.
+The installed development build is **v0.7.1**. Automated tests at release: **73 passing**.

@@ -1,4 +1,5 @@
 import { DEFAULT_SETTINGS, WINDOWS, windowsWithin } from "../shared/defaults.js";
+import { describeProgress, runRefresh } from "../shared/refresh-progress.js";
 
 const state = {
   window: DEFAULT_SETTINGS.defaultWindow,
@@ -415,12 +416,19 @@ async function refresh() {
   elements.refresh.disabled = true;
   showNotice(`Running one-time ${elements.maxTimeframe.selectedOptions[0]?.textContent || "index"} discovery… the saved feed will update only when it finishes.`);
   try {
-    const result = await send("REFRESH");
+    const result = await runRefresh(send, {
+      onProgress: (state) => {
+        const detail = describeProgress(state);
+        if (detail) showNotice(`Screening research · ${detail}`);
+      },
+    });
+    state.bundle = null;
+    // loadFeed rewrites the notice, so the result is reported after it.
+    await loadFeed({ skeleton: false });
     showNotice(
-      `Screened ${result.candidatesFetched} papers and enriched ${result.authorsFetched} researchers.`,
+      `Screened ${Number(result.candidatesFetched || 0).toLocaleString()} papers and enriched ${Number(result.authorsFetched || 0).toLocaleString()} researchers.`,
       "success",
     );
-    await loadFeed({ skeleton: false });
   } catch (error) {
     showNotice(error.message, "error");
   } finally {

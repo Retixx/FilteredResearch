@@ -1141,10 +1141,18 @@ async function handleMessage(message) {
     case "CLEAR_FEED_CACHE":
       feedCorpusCache = null;
       return { ok: true };
+    // Started without awaiting: a pass outlives the service worker's guaranteed
+    // lifetime, and holding the message channel open for it fails with "the
+    // message channel closed before a response was received". Callers watch
+    // GET_REFRESH_STATE instead.
     case "REFRESH":
-      return refresh("manual");
+      refresh("manual").catch((error) => console.warn("Discovery pass failed", error));
+      return { started: true, reason: "manual" };
     case "REBUILD":
-      return refresh("rebuild");
+      refresh("rebuild").catch((error) => console.warn("Discovery pass failed", error));
+      return { started: true, reason: "rebuild" };
+    case "GET_REFRESH_STATE":
+      return (await getMetadata("refreshState")) || null;
     case "SETTINGS_CHANGED":
       feedCorpusCache = null;
       await setMetadata("settingsChangedAt", new Date().toISOString());
