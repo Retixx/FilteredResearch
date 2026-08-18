@@ -71,6 +71,18 @@ Keep these short and tied to a user-visible feature.
 - **notifications (optional)** — requested only if you switch on desktop alerts
   for new papers; the extension works fully without granting it.
 
+## Remote code
+
+Answer **"No, I am not using remote code."**
+
+Every script and stylesheet is bundled in the package and loaded from a relative
+path. There is no `eval`, no `new Function`, no `importScripts`, no dynamically
+injected `<script>`, and no custom content security policy. The two network
+requests return JSON and HTML that are parsed as data and never executed.
+
+Chrome requires an answer here even when the answer is no, which is why the
+submission blocks until it is set.
+
 ## Privacy tab
 
 **Privacy policy URL:** `https://github.com/Retixx/FilteredResearch/blob/main/PRIVACY.md`
@@ -89,9 +101,14 @@ Data handling, category by category:
 | User activity | No | No analytics, no clicks or interaction are recorded or transmitted. |
 | Website content | **No** | Removed in v0.8.0. No content script is declared, so no page content is ever read. Earlier versions did read supported research pages; that is gone. |
 
-Then certify all three: data is not sold to third parties, is not used or
-transferred for purposes unrelated to the single purpose above, and is not used
-or transferred to determine creditworthiness or for lending.
+Then tick all three certifications, which are a separate required step from the
+disclosures above and block publishing on their own:
+
+- I do not sell or transfer user data to third parties, outside of the approved use cases
+- I do not use or transfer user data for purposes that are unrelated to my item's single purpose
+- I do not use or transfer user data to determine creditworthiness or for lending purposes
+
+All three are accurate: the extension transmits nothing to the developer.
 
 ## Store assets still required
 
