@@ -1,4 +1,4 @@
-# FilteredResearch v0.5.4 specification
+# FilteredResearch v0.6.0 specification
 
 ## Product contract
 
@@ -20,6 +20,7 @@ The primary user chooses an OpenAlex field/subfield and an index depth in the si
 - A stored index depth beyond the supported ceiling migrates onto the nearest supported depth instead of being rejected.
 - Full discovery runs only after explicit user action and the prior saved feed remains available until completion.
 - Enforce a $0.95 full-pass guard by estimated OpenAlex request costs; show locally recorded daily usage in Settings.
+- Retrieval is hybrid. The feed renders from the local index first, then a bounded gap fill retrieves what the last pass missed for the current window only, under its own budget and rate-limited per scope, so it never turns a render into a network wait.
 
 ### Filters
 
@@ -41,6 +42,9 @@ The primary user chooses an OpenAlex field/subfield and an index depth in the si
 ### Interface
 
 - Side panel uses past day, 3 days, week, 2 weeks, month, and 3 month tabs.
+- The saved index depth is a hard ceiling on every date view. Views wider than the depth are shown disabled rather than silently repeating the widest allowed view, and the worker reports the depth it applied so the picker can never display a scope the feed did not use.
+- Recency means first public release. An arXiv identifier encodes the month the preprint was submitted; when that precedes the recorded publication month it is used instead, so a preprint later re-published by a journal keeps its true age.
+- Cards show the first-release date and name the later re-publication date rather than presenting old work as new, and list each repository once.
 - One request builds every date view from a single corpus scan, and the side panel serves tab switches from that response. No tab switch issues a message, so switching cannot be delayed by a terminated service worker.
 - The feed render path reads no work or author records to report its counts; only the settings page computes full corpus totals.
 - Feed responses are paginated (maximum 250 serialized works) so a 20,000-paper low-selectivity result does not produce a giant Chrome message.
@@ -52,7 +56,9 @@ The primary user chooses an OpenAlex field/subfield and an index depth in the si
 
 - Native notifications are an optional Chrome permission requested only after the user enables them.
 - Notify only for newly indexed works that clear both current bars; keep a local inbox.
-- Supported page access is limited to arXiv, PubMed, Semantic Scholar, OpenAlex, Google Scholar, and DOI resolver URLs.
+- Supported page access is a named list of research publishers, repositories and indexes. No wildcard or all-URL access is ever requested, so ordinary browsing runs none of this code.
+- On a supported page, screening stops immediately unless the page carries a scholarly marker: a citation meta tag or a link shaped like a paper.
+- Paper rows are located by the links they must contain rather than by per-site selectors, so publishers that share no markup are all covered.
 - Content scripts inspect visible titles/DOIs/arXiv IDs, send them only to the extension service worker, and compare against the qualifying local index.
 - Highlighting screens the entire local index rather than a recent-only window, because search-result pages are dominated by older work.
 - A visible paper stays eligible for screening until it has been compared against a populated index; a failed or empty pass never permanently retires it.

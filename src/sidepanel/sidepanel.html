@@ -16,14 +16,14 @@
         </div>
       </div>
       <div class="topbar-actions">
-        <button id="notifications-button" class="icon-button inbox-button" type="button" title="New paper inbox">
+        <button id="notifications-button" class="icon-button inbox-button" type="button" title="Papers that cleared both bars on earlier passes">
           <svg viewBox="0 0 20 20" aria-hidden="true">
             <path d="M4.5 14.5h11l-1.2-1.8V8.6a4.3 4.3 0 0 0-8.6 0v4.1zM8.2 16.2c.3.8.9 1.2 1.8 1.2s1.5-.4 1.8-1.2" />
           </svg>
           <span id="notification-badge" class="notification-badge" hidden></span>
           <span class="sr-only">New paper inbox</span>
         </button>
-        <button id="refresh-button" class="icon-button" type="button" title="Refresh research">
+        <button id="refresh-button" class="icon-button" type="button" title="Run one discovery pass with your saved scope and index depth">
           <span aria-hidden="true">↻</span><span class="sr-only">Refresh</span>
         </button>
         <button id="settings-button" class="icon-button" type="button" title="Settings">
@@ -54,7 +54,7 @@
       </section>
       <section class="depth-control" aria-label="Maximum search timeframe">
         <label for="max-timeframe"><span>Index depth</span><select id="max-timeframe"><optgroup label="Light"><option value="1">1 day · Light</option><option value="3">3 days · Light</option></optgroup><optgroup label="Moderate"><option value="7">1 week · Moderate</option><option value="14">2 weeks · Moderate</option></optgroup><optgroup label="Intensive"><option value="30">1 month · Intensive</option><option value="90">3 months · Intensive</option></optgroup></select></label>
-        <small id="depth-warning" hidden>Longer pass · runs only when refreshed</small>
+        <small id="depth-warning" hidden>Deeper passes take longer · nothing runs until you refresh</small>
       </section>
 
       <section class="summary" aria-live="polite">
@@ -71,8 +71,8 @@
 
       <section id="empty-state" class="empty-state" hidden>
         <div class="empty-orbit" aria-hidden="true"><span></span></div>
-        <h2>No papers cleared the bar yet</h2>
-        <p>Set a field, personal OpenAlex key, and an index depth in the sidebar.</p>
+        <h2>Nothing has cleared both bars yet</h2>
+        <p>Choose a category and add your own OpenAlex key in settings, then press Screen research. Lower the acceptance bars if a pass returns too little.</p>
         <div class="empty-actions">
           <button id="empty-refresh" class="primary-button" type="button">Screen research</button>
           <button id="empty-settings" class="secondary-button" type="button">Add interests</button>

@@ -597,3 +597,11 @@ a:focus-visible {
     animation: none !important;
   }
 }
+
+/* Date views beyond the saved index depth stay visible for context but cannot
+   be selected, since they could only repeat the widest allowed view. */
+.window-tabs button.out-of-depth {
+  opacity: .38;
+  cursor: not-allowed;
+  text-decoration: line-through;
+}

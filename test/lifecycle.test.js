@@ -6,14 +6,22 @@ import {
   INDEX_DEPTHS,
   MAX_INDEX_DEPTH_DAYS,
   WINDOWS,
+  effectiveHorizonDays,
   normalizeSettings,
+  windowsWithin,
 } from "../src/shared/defaults.js";
+import { arxivSubmissionMonth, firstReleaseDate } from "../src/shared/openalex.js";
+import { groupDuplicatePapers } from "../src/shared/papers.js";
 
 const worker = await readFile(new URL("../src/background/service-worker.js", import.meta.url), "utf8");
 const panel = await readFile(new URL("../src/sidepanel/sidepanel.html", import.meta.url), "utf8");
 const panelScript = await readFile(new URL("../src/sidepanel/sidepanel.js", import.meta.url), "utf8");
 const db = await readFile(new URL("../src/shared/db.js", import.meta.url), "utf8");
 const sites = await readFile(new URL("../src/content/research-sites.js", import.meta.url), "utf8");
+const siteScript = sites;
+const arxiv = await readFile(new URL("../src/content/arxiv.js", import.meta.url), "utf8");
+const notificationsPage = await readFile(new URL("../src/notifications/notifications.html", import.meta.url), "utf8");
+const manifest = JSON.parse(await readFile(new URL("../manifest.json", import.meta.url), "utf8"));
 
 test("discovery has no alarm, startup, settings-save, or depth-change trigger", () => {
   assert.doesNotMatch(worker, /chrome\.alarms/);
@@ -72,7 +80,7 @@ test("switching date views renders from one bundled response", () => {
   // clicks from that response, so no tab switch waits on the service worker.
   assert.match(worker, /case "GET_FEED_BUNDLE":/);
   assert.match(worker, /async function getFeedBundle/);
-  assert.match(worker, /WINDOW_ORDER\.map/);
+  assert.match(worker, /available\.map\(/);
   assert.match(panelScript, /send\("GET_FEED_BUNDLE"/);
   assert.match(panelScript, /function showWindow/);
   assert.match(panelScript, /cached && state\.bundleSort === state\.sort/);
@@ -110,4 +118,88 @@ test("a paper stays eligible for highlighting until the index can answer", () =>
   assert.match(sites, /MIN_RETRY_GAP_MS/);
   assert.match(sites, /DEADLINE_MS/);
   assert.match(sites, /if \(scheduled \|\| expired\(\)\) return;/);
+});
+
+test("a narrowed index depth bounds every date view", () => {
+  // A completed deeper pass leaves older papers in the store; the saved depth
+  // is the ceiling regardless, so a 1-week scope cannot show month-old work.
+  assert.equal(effectiveHorizonDays({ maxTimeframeDays: 7 }, { horizonDays: 30 }), 7);
+  assert.equal(effectiveHorizonDays({ maxTimeframeDays: 30 }, { horizonDays: 7 }), 7);
+  assert.equal(effectiveHorizonDays({ maxTimeframeDays: 7 }, null), 7);
+  assert.deepEqual(windowsWithin(7), ["day", "3d", "week"]);
+  assert.deepEqual(windowsWithin(90), ["day", "3d", "week", "2w", "month", "3m"]);
+  // The worker owns the clamp and reports it, so the picker cannot display a
+  // scope the feed did not actually apply.
+  assert.match(worker, /effectiveHorizonDays\(settings, coverage\)/);
+  assert.match(worker, /availableWindows: available/);
+  assert.match(panelScript, /state\.availableWindows = bundle\.availableWindows/);
+  assert.match(panelScript, /if \(state\.availableWindows && !state\.availableWindows\.includes\(window\)\) return;/);
+});
+
+test("recency uses first public release, not journal re-publication", () => {
+  assert.equal(arxivSubmissionMonth("2505.22502"), "2025-05-01");
+  assert.equal(arxivSubmissionMonth("math/0309136"), "2003-09-01");
+  assert.equal(arxivSubmissionMonth("not-an-id"), null);
+  // The reported case: on arXiv in May 2025, re-published by a journal in 2026.
+  assert.equal(
+    firstReleaseDate({ arxivId: "2505.22502", publicationDate: "2026-08-14" }),
+    "2025-05-01",
+  );
+  // A genuinely new preprint keeps its precise date rather than losing days.
+  assert.equal(
+    firstReleaseDate({ arxivId: "2608.01234", publicationDate: "2026-08-15" }),
+    "2026-08-15",
+  );
+  assert.equal(firstReleaseDate({ publicationDate: "2026-08-15" }), "2026-08-15");
+  const [merged] = groupDuplicatePapers([
+    { id: "W1", title: "Assessing quantum advantage", authorships: [{ name: "Dominic Lowe" }], arxivId: "2505.22502", publicationDate: "2026-08-14" },
+    { id: "W2", title: "Assessing quantum advantage", authorships: [{ name: "Dominic Lowe" }], publicationDate: "2026-08-14" },
+  ]);
+  assert.equal(merged.firstReleaseDate, "2025-05-01");
+  assert.match(worker, /function releasedOn/);
+});
+
+test("every content script reads the screening envelope the worker sends", () => {
+  // arxiv.js read result as a flat map after the envelope changed, which
+  // silently removed every badge on arXiv pages.
+  assert.match(arxiv, /result\?\.matches/);
+  assert.doesNotMatch(arxiv, /const scores = response\.result \|\| \{\};/);
+  assert.match(sites, /payload\.matches/);
+});
+
+test("highlighting covers many publishers without touching other browsing", () => {
+  const matches = manifest.content_scripts.flatMap((script) => script.matches);
+  assert.ok(matches.length > 20, "expected broad research-site coverage");
+  assert.ok(matches.every((site) => site.startsWith("https://")));
+  assert.ok(matches.every((site) => !site.includes("<all_urls>") && !site.includes("*://")));
+  for (const host of ["nature.com", "sciencedirect.com", "biorxiv.org", "openreview.net"]) {
+    assert.ok(matches.some((site) => site.includes(host)), `missing ${host}`);
+  }
+  // Nothing runs at all on a page with no scholarly markers.
+  assert.match(siteScript, /function hasScholarlySignal/);
+  assert.match(siteScript, /if \(!hasScholarlySignal\(\)\) return;/);
+});
+
+test("retrieval is hybrid and never blocks a render", () => {
+  assert.match(worker, /case "FILL_FEED_GAP":/);
+  assert.match(worker, /GAP_FILL_INTERVAL_MS/);
+  assert.match(worker, /already filled recently/);
+  // The fill runs after the local render has settled, not before it.
+  const loadStart = panelScript.indexOf("async function loadFeed");
+  const loadEnd = panelScript.indexOf("function showWindow", loadStart);
+  const loadBody = panelScript.slice(loadStart, loadEnd);
+  assert.equal((loadBody.match(/fillGap\(\);/g) || []).length, 1, "one fill per load");
+  assert.ok(
+    loadBody.indexOf('aria-busy", "false"') < loadBody.indexOf("fillGap();"),
+    "fill must start after the load releases its in-progress guard",
+  );
+  assert.match(panelScript, /would be rejected by the in-progress guard[\s\S]*?fillGap\(\);/);
+});
+
+test("the notification page states how screening actually happens", () => {
+  // v0.5.1 removed startup and interval discovery; the page still claimed both.
+  assert.doesNotMatch(notificationsPage, /screens at Chrome startup/);
+  assert.match(notificationsPage, /Screening only runs when you ask for it/);
+  // A first pass seeds the inbox so the page is reachable for a new user.
+  assert.match(worker, /const seeding = !previousLastRefresh;/);
 });

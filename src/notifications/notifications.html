@@ -9,7 +9,7 @@
   <body>
     <header class="masthead">
       <div class="wordmark"><span>FR</span> FilteredResearch</div>
-      <p>New-paper inbox / local to this Chrome profile</p>
+      <p>New-paper inbox / stored locally in this Chrome profile</p>
     </header>
 
     <main>
@@ -17,10 +17,10 @@
         <div>
           <p class="eyebrow">Notifications</p>
           <h1>Ideas that arrived while you were elsewhere.</h1>
-          <p>Only newly discovered papers that cleared your current filters and acceptance bar appear here.</p>
+          <p>Papers added by a screening pass that cleared both acceptance bars under your current filters. Nothing here is fetched automatically — the inbox fills when you run a pass.</p>
         </div>
         <div class="intro-actions">
-          <button id="screen-now" class="primary-button" type="button">Screen now</button>
+          <button id="screen-now" class="primary-button" type="button" title="Runs one discovery pass against OpenAlex using your saved scope and index depth">Screen now</button>
           <button id="clear-inbox" class="secondary-button" type="button">Clear inbox</button>
         </div>
       </section>
@@ -33,7 +33,7 @@
       <section id="empty" class="empty" hidden>
         <div class="empty-mark" aria-hidden="true"></div>
         <h2>No new papers yet.</h2>
-        <p>FilteredResearch screens at Chrome startup and on your selected interval.</p>
+        <p>Screening only runs when you ask for it. Press <strong>Screen now</strong>, or Refresh Research in the side panel, and papers that clear both bars will collect here.</p>
       </section>
     </main>
 

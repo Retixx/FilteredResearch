@@ -49,18 +49,21 @@ function render(entries) {
 async function load() {
   const entries = await send("GET_NOTIFICATIONS");
   render(entries);
-  status.textContent = entries.length ? "Newest first" : "Inbox clear";
+  status.textContent = entries.length
+    ? `Newest first · ${entries.filter((entry) => entry.unread).length} unread`
+    : "Inbox clear · run a pass to collect papers";
   const unreadIds = entries.filter((entry) => entry.unread).map((entry) => entry.id);
   if (unreadIds.length) await send("MARK_NOTIFICATIONS_READ", { ids: unreadIds });
 }
 
 document.querySelector("#screen-now").addEventListener("click", async (event) => {
   event.currentTarget.disabled = true;
-  status.textContent = "Screening new research…";
+  status.textContent = "Running one discovery pass… this uses your OpenAlex allowance.";
   try {
     const result = await send("REFRESH");
-    status.textContent = `Screened ${result.candidatesFetched} papers`;
+    // load() rewrites the status line, so the pass result is reported after it.
     await load();
+    status.textContent = `Screened ${result.candidatesFetched} papers · ${result.notificationsGenerated || 0} new here`;
   } catch (error) {
     status.textContent = error.message;
   } finally {

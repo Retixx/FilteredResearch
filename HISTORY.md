@@ -59,6 +59,18 @@
 - A visible paper is no longer permanently retired by a failed or empty pass, and late-rendering results get further screening attempts instead of waiting for an unrelated page change.
 - Redesigned the subfield disclosure rows: pill-style counts with hover and open states, native disclosure markers removed, responsive subfield columns, and a styled scroll area.
 
+## v0.6.0 — Working highlights, true recency, hybrid retrieval
+
+- Fixed page highlighting, which v0.5.4 had broken on arXiv: that release changed the screening response to `{ matches, indexReady }` but only updated the research-site script, so `arxiv.js` read the envelope as a flat map and produced no badges at all. A test now covers every content script against the worker's envelope.
+- Extended highlighting to roughly 38 named research publishers, repositories and indexes, finding paper rows by the links they must contain instead of per-site selectors.
+- Kept the cost of that at zero elsewhere: scripts are injected only on the named hosts, and on those hosts screening exits before any work unless the page carries citation metadata or a paper-shaped link.
+- Recency is now first public release rather than journal publication date. arXiv identifiers encode the submission month, so a preprint from 2025 re-published by a journal days ago keeps its real age; a genuinely new preprint keeps its precise date.
+- Cards show the first-release date, name the later re-publication date instead of hiding it, and list each repository once rather than repeating it per indexed location.
+- The saved index depth is now a hard ceiling on every date view. Wider views are disabled rather than silently repeating the widest allowed one, and the worker reports the depth it applied so the picker cannot show a scope the feed did not use.
+- Retrieval is hybrid. The feed still renders instantly from the local index, then a bounded gap fill retrieves what the last pass missed for the current window under its own budget, rate-limited per scope, started only after the render settles.
+- The notification page no longer claims to screen at Chrome startup or on an interval, which had not been true since v0.5.1. It reports what a pass found, and a first pass seeds the inbox so a new user can see the feature at all.
+- Reworked side-panel and notification copy to describe what each control does.
+
 ## Current state
 
-The installed development build is **v0.5.4**. Automated tests at release: **44 passing**.
+The installed development build is **v0.6.0**. Automated tests at release: **50 passing**.

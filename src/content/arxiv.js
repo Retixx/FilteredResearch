@@ -23,9 +23,12 @@
     const categories = [...new Set([...linkedCategories, ...textCategories])];
     return { key: normalizeId(link.getAttribute("href")), title, arxivId: normalizeId(link.getAttribute("href")), categories };
   }).filter((entry, index, all) => entry.title && all.findIndex((item) => item.key === entry.key) === index);
-  const response = await chrome.runtime.sendMessage({ type: "SCREEN_SITE_ITEMS", payload: { items: entries } });
-  if (!response?.ok) return;
-  const scores = response.result || {};
+  // SCREEN_SITE_ITEMS answers { matches, indexReady }; reading the envelope as a
+  // flat map silently produced no badges at all.
+  const readMatches = (response) => (response?.ok ? response.result?.matches || {} : {});
+  const scores = readMatches(
+    await chrome.runtime.sendMessage({ type: "SCREEN_SITE_ITEMS", payload: { items: entries } }),
+  );
 
   function makeBadge(work) {
     const badge = document.createElement("span");
@@ -64,7 +67,7 @@
     const linkedCategories = [...document.querySelectorAll('a[href*="/list/"]')].map((item) => item.getAttribute("href")?.match(/\/list\/([^/?#]+)/)?.[1]).filter(Boolean);
     const textCategories = [...String(document.querySelector(".subheader, .subjects")?.textContent || "").matchAll(/\(([a-z-]+(?:\.[A-Za-z-]+)?)\)/g)].map((match) => match[1]);
     const screened = await chrome.runtime.sendMessage({ type: "SCREEN_SITE_ITEMS", payload: { items: [{ key: arxivId, title, arxivId, categories: [...new Set([...linkedCategories, ...textCategories])] }] } });
-    if (screened?.ok) work = screened.result?.[arxivId];
+    work = readMatches(screened)[arxivId];
   }
   if (!work || !titleElement || document.querySelector(".filteredresearch-abs-score")) return;
 

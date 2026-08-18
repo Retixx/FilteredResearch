@@ -1,13 +1,22 @@
 # FilteredResearch
 
-FilteredResearch v0.5.4 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
+FilteredResearch v0.6.0 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
 
 - **Novelty**: lexical distance from up to 320 older, field-adjacent OpenAlex papers, adjusted for evidence completeness, rare title phrases, cross-field combinations, and incremental wording.
 - **Authorship**: an established-track-record signal using author h-index, citations, recent citedness, works count, ORCID presence, and authorship role.
 
 Neither score proves scientific novelty, quality, correctness, reputation, or significance. They are screening heuristics for deciding what to inspect next.
 
-## What changed in v0.5.4
+## What changed in v0.6.0
+
+- Page highlighting works again and covers far more sites. A v0.5.4 change to the screening response shape was never applied to the arXiv script, so every arXiv badge silently disappeared; the shape is now shared and tested. Coverage extends to ~38 named publishers, repositories and indexes, located by the links a paper row must contain rather than per-site selectors.
+- Highlighting costs nothing anywhere else. Scripts load only on those named hosts, and even there a page with no citation metadata and no paper-shaped link is left completely untouched.
+- Recency now means first public release. An arXiv id encodes its submission month, so a 2025 preprint re-published by a journal last week is no longer presented as days-old research.
+- Index depth is a hard ceiling on every date view. Views wider than the depth are disabled instead of quietly showing the same papers, and the worker reports the depth it actually applied.
+- Retrieval is hybrid: the feed renders instantly from the local index, then a bounded, rate-limited gap fill pulls what the last pass missed for the current window.
+- The notification page no longer claims to screen at startup or on an interval, reports what a pass found, and a first pass seeds the inbox so the page is reachable.
+
+## Earlier, in v0.5.4
 
 - Index depth offers six options in three tiers — 1 day and 3 days (Light), 1 week and 2 weeks (Moderate), 1 month and 3 months (Intensive). The 6-month and 1-year depths are gone: they retrieved far more works than the scoring stage could keep up with, which was the direct cause of slow discovery. Changing depth never starts discovery.
 - Switching date views is immediate again. One request builds every view from a single corpus scan and the sidebar renders tab switches from that response, so no switch waits on the service worker.

@@ -57,6 +57,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   fullScanBudgetUsd: 0.95,
   incrementalScanBudgetUsd: 0.02,
   siteScreenBudgetUsd: 0.15,
+  gapFillBudgetUsd: 0.1,
   showArxivBadges: true,
 });
 
@@ -71,6 +72,24 @@ export const INCREMENTAL_MARKERS = Object.freeze([
   "fine-tuning",
   "fine tuning",
 ]);
+
+// The saved index depth is a hard ceiling on every date view: a completed pass
+// may physically hold older papers from a previous deeper depth, and those must
+// not leak into the feed once the user narrows the scope. Kept here, and pure,
+// so the clamp is testable instead of being re-derived inside the worker.
+export function effectiveHorizonDays(settings = {}, coverage = null) {
+  const depth = Number(settings.maxTimeframeDays);
+  const ceiling = Number.isFinite(depth) && depth > 0 ? depth : DEFAULT_SETTINGS.maxTimeframeDays;
+  const indexed = Number(coverage?.horizonDays);
+  const reached = Number.isFinite(indexed) && indexed > 0 ? indexed : ceiling;
+  return Math.max(1, Math.min(ceiling, reached));
+}
+
+// Date views wider than the index depth would silently show the same papers as
+// the widest allowed view, so they are offered only up to the depth.
+export function windowsWithin(days) {
+  return WINDOW_ORDER.filter((name) => WINDOWS[name].days <= Math.max(1, Number(days) || 1));
+}
 
 export const SETTINGS_KEY = "settings";
 export const SECRET_KEY = "openAlexApiKey";
@@ -126,6 +145,7 @@ export function normalizeSettings(value = {}) {
     fullScanBudgetUsd: [0.05, 0.95],
     incrementalScanBudgetUsd: [0.005, 0.1],
     siteScreenBudgetUsd: [0.02, 0.5],
+    gapFillBudgetUsd: [0.01, 0.4],
   };
   for (const [key, [minimum, maximum]] of Object.entries(numericBounds)) {
     const parsed = Number(merged[key]);

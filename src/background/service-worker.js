@@ -1,8 +1,9 @@
 import {
   WINDOWS,
-  WINDOW_ORDER,
+  effectiveHorizonDays,
   loadSettings,
   normalizeSettings,
+  windowsWithin,
 } from "../shared/defaults.js";
 import {
   bulkPut,
@@ -25,7 +26,7 @@ import {
   researchFilterSignature,
   selectionFromSettings,
 } from "../shared/filters.js";
-import { OpenAlexClient, cleanWorkForDisplay } from "../shared/openalex.js";
+import { OpenAlexClient, cleanWorkForDisplay, firstReleaseDate } from "../shared/openalex.js";
 import { applySelectivity } from "../shared/ranking.js";
 import { groupDuplicatePapers } from "../shared/papers.js";
 import { annotateProminence, buildProminentResearcherRoster } from "../shared/prominence.js";
@@ -80,6 +81,12 @@ function yearsAgo(years, fromIso) {
   const value = new Date(`${fromIso}T00:00:00Z`);
   value.setUTCFullYear(value.getUTCFullYear() - years);
   return isoDate(value);
+}
+
+// Recency everywhere in this worker means first public release, not the date a
+// journal happened to re-publish an existing preprint.
+function releasedOn(work) {
+  return work.firstReleaseDate || firstReleaseDate(work);
 }
 
 function deduplicate(works) {
@@ -450,7 +457,7 @@ async function filteredCorpus(settings, { lastRefresh = null } = {}) {
 async function qualifiedPapers(settings, { days = 30 } = {}) {
   const corpus = await filteredCorpus(settings);
   const cutoff = days === null ? null : daysAgo(days);
-  const relevant = cutoff ? corpus.filter((work) => work.publicationDate >= cutoff) : corpus;
+  const relevant = cutoff ? corpus.filter((work) => releasedOn(work) >= cutoff) : corpus;
   return applySelectivity(relevant, settings);
 }
 
@@ -463,7 +470,7 @@ async function qualifiedMonth(settings, allWorks = null) {
         (work) =>
           !work.isBaseline &&
           work.scoringVersion &&
-          work.publicationDate >= daysAgo(30) &&
+          releasedOn(work) >= daysAgo(30) &&
           matchesResearchFilters(work, settings),
       );
     return applySelectivity(relevant, settings);
@@ -478,16 +485,25 @@ async function recordNewPaperNotifications(
   previousLastRefresh,
   reason,
 ) {
-  if (!previousLastRefresh || reason === "install") return 0;
-  const previousDate = previousLastRefresh.slice(0, 10);
+  if (reason === "install") return 0;
   const qualified = await qualifiedMonth(settings);
   const qualifiedIds = new Set(qualified.works.map((work) => work.id));
-  const newWorks = scored.filter(
-    (work) =>
-      !existingCandidateIds.has(work.id) &&
-      work.publicationDate >= previousDate &&
-      qualifiedIds.has(work.id),
-  );
+  // The very first pass has no previous run to diff against. Seeding the inbox
+  // with the strongest recent results makes the feature reachable instead of
+  // leaving a new user with a permanently empty page.
+  const seeding = !previousLastRefresh;
+  const previousDate = previousLastRefresh ? previousLastRefresh.slice(0, 10) : null;
+  const newWorks = seeding
+    ? qualified.works
+        .slice()
+        .sort((left, right) => Number(right.discoveryScore || 0) - Number(left.discoveryScore || 0))
+        .slice(0, 10)
+    : scored.filter(
+        (work) =>
+          !existingCandidateIds.has(work.id) &&
+          releasedOn(work) >= previousDate &&
+          qualifiedIds.has(work.id),
+      );
   if (!newWorks.length) return 0;
 
   const oldInbox = (await getMetadata("notificationInbox")) || [];
@@ -500,7 +516,7 @@ async function recordNewPaperNotifications(
       workId: work.id,
       title: cleanWorkForDisplay(work).title,
       url: safePaperUrl(work),
-      publicationDate: work.publicationDate,
+      publicationDate: releasedOn(work) || work.publicationDate,
       topic: work.subfieldName || work.fieldName || "Research",
       noveltyScore: Math.round(work.noveltyScore || 0),
       researcherScore: Math.round(work.researcherScore || 0),
@@ -718,7 +734,7 @@ const SORTERS = {
   balanced: (left, right) => right.discoveryScore - left.discoveryScore,
   novelty: (left, right) => right.noveltyScore - left.noveltyScore,
   researcher: (left, right) => right.researcherScore - left.researcherScore,
-  newest: (left, right) => right.publicationDate.localeCompare(left.publicationDate),
+  newest: (left, right) => releasedOn(right).localeCompare(releasedOn(left)),
 };
 
 // Shared preamble for both the single-window and all-window paths, so a bundle
@@ -737,16 +753,11 @@ async function feedContext(settings) {
     (meta.coverageByScope || {})[signature] ||
       (legacyCoverage?.signature === signature ? legacyCoverage : null),
   );
-  const indexedHorizonDays = Math.max(
-    1,
-    Math.min(
-      Number(coverage?.horizonDays || settings.maxTimeframeDays || 30),
-      Number(settings.maxTimeframeDays || 30),
-    ),
-  );
+  const indexedHorizonDays = effectiveHorizonDays(settings, coverage);
   return {
     coverage,
     indexedHorizonDays,
+    maxTimeframeDays: settings.maxTimeframeDays,
     settingsChangedAt: meta.settingsChangedAt,
     corpus: await filteredCorpus(settings, { lastRefresh: meta.lastRefresh }),
     stats: await feedStats(),
@@ -757,7 +768,7 @@ function windowSlice(context, settings, { window, sort, includeAll, offset, limi
   const windowConfig = WINDOWS[window] || WINDOWS.week;
   const effectiveDays = Math.min(windowConfig.days, context.indexedHorizonDays);
   const cutoff = daysAgo(effectiveDays);
-  const relevant = context.corpus.filter((work) => work.publicationDate >= cutoff);
+  const relevant = context.corpus.filter((work) => releasedOn(work) >= cutoff);
   const selected = applySelectivity(relevant, settings, { includeAll });
   selected.works.sort(SORTERS[sort] || SORTERS.balanced);
   const safeOffset = Math.max(0, Number(offset) || 0);
@@ -782,6 +793,7 @@ function windowSlice(context, settings, { window, sort, includeAll, offset, limi
     },
     coverage: context.coverage,
     indexedHorizonDays: context.indexedHorizonDays,
+    maxTimeframeDays: context.maxTimeframeDays,
     requestedBeyondCoverage: windowConfig.days > context.indexedHorizonDays,
     settingsChangedAt: context.settingsChangedAt,
     stats: context.stats,
@@ -806,13 +818,86 @@ async function getFeed({
 async function getFeedBundle({ sort = "balanced", limit = 120 } = {}) {
   const settings = await loadSettings();
   const context = await feedContext(settings);
+  // Only the views the saved depth can actually distinguish are built. A wider
+  // view would repeat the widest allowed one while implying it searched further.
+  const available = windowsWithin(context.indexedHorizonDays);
   const windows = Object.fromEntries(
-    WINDOW_ORDER.map((window) => [
+    available.map((window) => [
       window,
       windowSlice(context, settings, { window, sort, includeAll: false, offset: 0, limit }),
     ]),
   );
-  return { sort, windows };
+  return {
+    sort,
+    windows,
+    availableWindows: available,
+    indexedHorizonDays: context.indexedHorizonDays,
+    maxTimeframeDays: context.maxTimeframeDays,
+  };
+}
+
+// Hybrid retrieval. The feed always renders from the local index first, then
+// this fills the window's coverage hole from OpenAlex in the background. It is
+// bounded, scoped to one window, and rate-limited per scope so it can never
+// turn a render into a network wait.
+const GAP_FILL_LIMIT = 400;
+const GAP_FILL_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+async function fillFeedGap({ window = "week" } = {}) {
+  const settings = await loadSettings();
+  const selection = selectionFromSettings(settings);
+  if (!settings.apiKey || !(selection.fieldIds.length || selection.subfieldIds.length)) {
+    return { added: 0, skipped: "needs an API key and a selected category" };
+  }
+  const signature = discoveryScopeSignature(settings);
+  const horizon = effectiveHorizonDays(settings, migratedCoverage(
+    ((await getMetadata("coverageByScope")) || {})[signature],
+  ));
+  const days = Math.min(WINDOWS[window]?.days || 7, horizon);
+  const stampKey = `gapFill:${signature}:${days}`;
+  const stamps = (await getMetadata("gapFillStamps")) || {};
+  if (Date.now() - Number(stamps[stampKey] || 0) < GAP_FILL_INTERVAL_MS) {
+    return { added: 0, skipped: "already filled recently" };
+  }
+
+  const client = openAlexClient({ apiKey: settings.apiKey, maxEstimatedCostUsd: settings.gapFillBudgetUsd });
+  let fetched = [];
+  try {
+    const result = await client.fetchWorksCursor({
+      since: daysAgo(days),
+      until: isoDate(),
+      limit: GAP_FILL_LIMIT,
+      query: "",
+      fieldIds: selection.fieldIds,
+      subfieldIds: selection.subfieldIds,
+      englishOnly: settings.englishOnly,
+      requireAbstract: false,
+    });
+    fetched = result.works || [];
+  } catch (error) {
+    console.warn("Gap fill stopped", error);
+    return { added: 0, skipped: "budget or network limit" };
+  }
+
+  const known = new Set((await getAll("works")).map((work) => work.id));
+  const candidates = fetched
+    .filter((work) => !known.has(work.id))
+    .filter((work) => matchesResearchFilters(work, settings))
+    .map((work) => ({ ...work, isBaseline: false }));
+  await setMetadata("gapFillStamps", { ...stamps, [stampKey]: Date.now() });
+  if (!candidates.length) return { added: 0 };
+
+  const authorIds = chooseAuthorIds(candidates, Math.min(settings.maxAuthors, 3_000));
+  const fetchedAuthors = await client.fetchAuthors(authorIds).catch(() => []);
+  if (fetchedAuthors.length) await bulkPut("authors", fetchedAuthors);
+  const allAuthors = deduplicateAuthors([...(await getAll("authors")), ...fetchedAuthors]);
+  await getProminenceRoster(allAuthors);
+  const references = selectReferences(await getAll("works"), settings.maxReferenceWorks);
+  const scored = scoreBatch(candidates, references, allAuthors, {
+    maxPeerComparisons: settings.maxPeerComparisons,
+  });
+  await storeWorks(scored);
+  return { added: scored.length, window, days };
 }
 
 async function getQualifiedArxivScores(ids) {
@@ -997,6 +1082,8 @@ async function handleMessage(message) {
       return getFeed(message.payload);
     case "GET_FEED_BUNDLE":
       return getFeedBundle(message.payload);
+    case "FILL_FEED_GAP":
+      return fillFeedGap(message.payload || {});
     case "GET_STATUS":
       return databaseStats();
     case "GET_TAXONOMY":

@@ -11,6 +11,7 @@ const state = {
   maxTimeframeDays: DEFAULT_SETTINGS.maxTimeframeDays,
   bundle: null,
   bundleSort: null,
+  availableWindows: null,
 };
 
 const BATCH_SIZE = 60;
@@ -111,7 +112,15 @@ function renderPaper(work, index) {
   const card = fragment.querySelector(".paper-card");
   card.dataset.id = work.id;
   fragment.querySelector(".paper-rank").textContent = String(index + 1).padStart(2, "0");
-  fragment.querySelector(".paper-date").textContent = formatDate(work.publicationDate);
+  const released = work.firstReleaseDate || work.publicationDate;
+  const dateCell = fragment.querySelector(".paper-date");
+  dateCell.textContent = formatDate(released);
+  // When a journal re-published an older preprint, show the age that actually
+  // matters and name the later date rather than presenting it as new research.
+  if (work.publicationDate && released && work.publicationDate.slice(0, 7) > released.slice(0, 7)) {
+    dateCell.textContent = `${formatDate(released)} · first posted`;
+    dateCell.title = `First public release ${released}; re-published ${work.publicationDate}.`;
+  }
   fragment.querySelector(".paper-topic").textContent = work.subfieldName || work.fieldName || "Unclassified";
   const title = fragment.querySelector(".paper-title");
   title.textContent = work.title;
@@ -125,7 +134,10 @@ function renderPaper(work, index) {
   }
   fragment.querySelector(".paper-why").textContent = whyLine(work);
   const sources = fragment.querySelector(".paper-sources");
-  const sourceList = (work.sources?.length ? work.sources : [{ name: work.sourceName || work.workType || "Research paper", url: work.url || work.doi }]).slice(0, 3);
+  // The same repository often appears once per indexed location; listing it
+  // twice told the reader nothing.
+  const rawSources = work.sources?.length ? work.sources : [{ name: work.sourceName || work.workType || "Research paper", url: work.url || work.doi }];
+  const sourceList = [...new Map(rawSources.map((source) => [String(source.name || "").trim().toLowerCase(), source])).values()].slice(0, 3);
   sourceList.forEach((source, sourceIndex) => {
     const link = document.createElement("a"); link.className = "source-link"; link.target = "_blank"; link.rel = "noreferrer";
     link.href = safeExternalUrl(source.url, `https://openalex.org/${work.id}`); link.textContent = `${sourceList.length > 1 ? `Source ${sourceIndex + 1} · ` : ""}${source.name || "Journal record"}`; sources.append(link);
@@ -199,13 +211,21 @@ function updateNotificationBadge(count) {
 function updateControls() {
   elements.maxTimeframe.value = String(state.maxTimeframeDays);
   elements.depthWarning.hidden = state.maxTimeframeDays < 30;
+  // Views wider than the saved depth cannot show anything the widest allowed
+  // view does not already show, so they are disabled rather than silently
+  // repeating it.
+  const allowed = state.availableWindows;
   for (const tab of elements.tabs) {
+    const usable = !allowed || allowed.includes(tab.dataset.window);
     const active = tab.dataset.window === state.window;
-    tab.classList.toggle("active", active);
-    tab.setAttribute("aria-selected", String(active));
+    tab.classList.toggle("active", active && usable);
+    tab.classList.toggle("out-of-depth", !usable);
+    tab.disabled = !usable;
+    tab.title = usable ? "" : `Raise Index depth past ${WINDOWS[tab.dataset.window]?.label?.toLowerCase() || "this range"} to search this far back`;
+    tab.setAttribute("aria-selected", String(active && usable));
   }
   elements.sort.value = state.sort;
-  elements.summaryCopy.textContent = "papers cleared both bars";
+  elements.summaryCopy.textContent = state.resultCount === 1 ? "paper cleared both bars" : "papers cleared both bars";
 }
 
 function showNotice(message, tone = "info") {
@@ -236,9 +256,9 @@ function renderResult(result) {
     : "Ready for the first screen";
   const coverage = result.coverage;
   if (result.requestedBeyondCoverage) {
-    showNotice(`Showing the saved ${result.indexedHorizonDays >= 30 ? `${Math.round(result.indexedHorizonDays / 30)}M` : `${result.indexedHorizonDays}D`} index. Choose a deeper Index depth and press Refresh Research to check older papers.`);
+    showNotice(`This view is capped at your ${result.indexedHorizonDays}-day index depth. Raise Index depth and refresh to reach further back.`);
   } else if (result.settingsChangedAt && (!lastRefresh || Date.parse(result.settingsChangedAt) > Date.parse(lastRefresh))) {
-    showNotice("New settings are filtering saved papers and browser highlights now. Press Refresh Research only when you want new discovery.");
+    showNotice("Filters changed. Saved papers and page highlights were re-screened locally; refresh only to fetch new research.");
   } else if (refreshState?.status === "running") {
     const progress = refreshState.total
       ? ` ${compactNumber(refreshState.fetched)} of ${compactNumber(refreshState.total)} fetched.`
@@ -256,7 +276,7 @@ function renderResult(result) {
       "success",
     );
   } else if (!lastRefresh) {
-    showNotice("First run creates a limited preview. A personal key plus a selected field enables exhaustive indexing.");
+    showNotice("No pass has run yet. Without your own OpenAlex key this stays a small preview; add one in settings for full coverage.");
   } else {
     showNotice("");
   }
@@ -275,6 +295,16 @@ async function loadFeed({ skeleton = true } = {}) {
     const bundle = await send("GET_FEED_BUNDLE", { sort: state.sort, limit: PAGE_SIZE });
     state.bundle = bundle.windows;
     state.bundleSort = bundle.sort;
+    state.availableWindows = bundle.availableWindows || Object.keys(bundle.windows);
+    // The worker is the single source of truth for depth. Reading it back here
+    // keeps the picker from ever displaying a scope the feed did not apply.
+    if (Number.isFinite(Number(bundle.maxTimeframeDays))) {
+      state.maxTimeframeDays = Number(bundle.maxTimeframeDays);
+    }
+    if (!state.availableWindows.includes(state.window)) {
+      state.window = state.availableWindows.at(-1) || state.window;
+    }
+    updateControls();
     renderResult(state.bundle[state.window] || Object.values(state.bundle)[0]);
   } catch (error) {
     state.bundle = null;
@@ -285,9 +315,33 @@ async function loadFeed({ skeleton = true } = {}) {
     state.loading = false;
     elements.feed.setAttribute("aria-busy", "false");
   }
+  // Started only once the load has fully settled, otherwise its own reload
+  // would be rejected by the in-progress guard at the top of this function.
+  fillGap();
+}
+
+// Retrieval is hybrid: the render above is already on screen from the local
+// index, and this tops up the current window from OpenAlex afterwards. It never
+// blocks a render, and the worker rate-limits it per scope.
+let gapFillInFlight = false;
+async function fillGap() {
+  if (gapFillInFlight) return;
+  gapFillInFlight = true;
+  try {
+    const result = await send("FILL_FEED_GAP", { window: state.window });
+    if (!result?.added) return;
+    state.bundle = null;
+    await loadFeed({ skeleton: false });
+    showNotice(`Added ${result.added} paper${result.added === 1 ? "" : "s"} the last pass had not retrieved.`, "success");
+  } catch {
+    // A gap fill is an enhancement; the local feed already rendered.
+  } finally {
+    gapFillInFlight = false;
+  }
 }
 
 function showWindow(window) {
+  if (state.availableWindows && !state.availableWindows.includes(window)) return;
   state.window = window;
   updateControls();
   const cached = state.bundle?.[window];

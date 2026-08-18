@@ -493,3 +493,32 @@ function normalizeText(value) {
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 }
+
+// arXiv identifiers encode the month the preprint was first submitted: modern
+// ids are YYMM.NNNNN and legacy ids are archive/YYMMNNN. OpenAlex stores a
+// single publication_date per work, which for a preprint later picked up by a
+// journal is the journal's date. Ranking on that date presented year-old
+// research as brand new, so first release is derived separately.
+export function arxivSubmissionMonth(arxivId) {
+  const raw = String(arxivId || "").trim();
+  const modern = raw.match(/^(\d{2})(\d{2})\.\d{4,5}/);
+  const legacy = raw.match(/^[a-z-]+(?:\.[A-Za-z-]{2})?\/(\d{2})(\d{2})\d{3}/i);
+  const match = modern || legacy;
+  if (!match) return null;
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return null;
+  const year = 1900 + Number(match[1]) + (Number(match[1]) < 90 ? 100 : 0);
+  return `${year}-${String(month).padStart(2, "0")}-01`;
+}
+
+// Returns the earliest date the work was demonstrably public. When the preprint
+// month precedes the recorded publication month the exact day is unavailable,
+// but such a work is old enough that day precision no longer matters; when the
+// two fall in the same month the recorded date is kept because it is precise.
+export function firstReleaseDate(work = {}) {
+  const published = String(work.publicationDate || "").slice(0, 10);
+  const preprint = arxivSubmissionMonth(work.arxivId);
+  if (!preprint) return published;
+  if (!published) return preprint;
+  return preprint < `${published.slice(0, 7)}-01` ? preprint : published;
+}

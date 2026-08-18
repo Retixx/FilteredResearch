@@ -59,6 +59,36 @@
     return [];
   }
 
+  // Publisher and repository sites share no markup, so paper rows are found by
+  // the links they must contain rather than by per-site selectors.
+  const PAPER_LINK_SELECTOR = [
+    'a[href*="/doi/"]', 'a[href*="doi.org/"]', 'a[href*="/abs/"]',
+    'a[href*="/article/"]', 'a[href*="/articles/"]', 'a[href*="/paper/"]',
+    'a[href*="/papers/"]', 'a[href*="/full/"]', 'a[href*="/content/"]',
+    'a[href*="/forum?id="]', 'a[href*="/pmc/articles/"]',
+  ].join(",");
+
+  // One cheap check before any real work: a page with no scholarly markers at
+  // all is left completely alone.
+  function hasScholarlySignal() {
+    return Boolean(
+      document.querySelector('meta[name="citation_title"], meta[name="citation_doi"], meta[name="dc.identifier"]') ||
+        document.querySelector(PAPER_LINK_SELECTOR),
+    );
+  }
+
+  function genericContainers() {
+    const found = [];
+    for (const anchor of document.querySelectorAll(PAPER_LINK_SELECTOR)) {
+      const container =
+        anchor.closest('article, li, tr, [class*="result"], [class*="Result"], [class*="card"], [class*="item"]') ||
+        anchor.parentElement;
+      if (container) found.push(container);
+      if (found.length >= MAX_CANDIDATES * 2) break;
+    }
+    return found;
+  }
+
   function titleFrom(container) {
     const meta = container.querySelector?.('meta[name="citation_title"], meta[property="og:title"]');
     if (meta?.content) return cleanTitle(meta.content);
@@ -79,8 +109,12 @@
       candidates.push({ container, title: cleanTitle(pageTitle), doi: doiFrom(document), arxivId: arxivFrom(document) });
       seenContainers.add(container);
     }
-    for (const selector of candidateSelectors()) {
-      for (const found of document.querySelectorAll(selector)) {
+    const selectors = candidateSelectors();
+    const hostContainers = selectors.length
+      ? selectors.flatMap((selector) => [...document.querySelectorAll(selector)])
+      : [];
+    for (const group of [hostContainers, hostContainers.length ? [] : genericContainers()]) {
+      for (const found of group) {
         const container = location.hostname === "openalex.org"
           ? found.closest("article, li, [role='listitem'], div[class*='card']") || found.parentElement
           : found;
@@ -119,6 +153,7 @@
     if (expired()) return;
     running = true;
     try {
+      if (!hasScholarlySignal()) return;
       const candidates = collectCandidates().filter((candidate) => eligible(candidate.container));
       if (!candidates.length) return;
       const items = candidates.map((candidate, index) => ({
