@@ -558,7 +558,7 @@ async function recordNewPaperNotifications(
       type: "basic",
       iconUrl: chrome.runtime.getURL("assets/icon-128.png"),
       title: `${entries.length} new papers cleared both filters`,
-      message: "Open the FilteredResearch inbox to review the full batch.",
+      message: "Open the Filtered Research inbox to review the full batch.",
       priority: 1,
     });
   }

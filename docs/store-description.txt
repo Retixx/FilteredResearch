@@ -1,6 +1,6 @@
-Most research tools show you what is new. FilteredResearch shows you what is actually different.
+Most research tools show you what is new. Filtered Research shows you what is actually different.
 
-Every field publishes far more than anyone can read, and the genuinely original work is buried under incremental papers, benchmark reruns and surveys that restate what is already known. FilteredResearch screens recent literature in a field you choose and ranks it on two signals you control, so the unusual work rises and the routine work sinks.
+Every field publishes far more than anyone can read, and the genuinely original work is buried under incremental papers, benchmark reruns and surveys that restate what is already known. Filtered Research screens recent literature in a field you choose and ranks it on two signals you control, so the unusual work rises and the routine work sinks.
 
 It runs entirely in your browser. There is no account, no server, and no tracking.
 
@@ -25,7 +25,7 @@ WHY RECENT ACTUALLY MEANS RECENT
 
 Bibliographic databases record the date a journal published a paper, not the date the work appeared. A preprint posted in 2025 and picked up by a journal last week is listed as brand new research, which is misleading when you are hunting for what just came out.
 
-FilteredResearch reads the original posting date where one exists and ranks on that instead, then tells you when a paper was republished later. Work that has been available for a year no longer masquerades as this week's discovery.
+Filtered Research reads the original posting date where one exists and ranks on that instead, then tells you when a paper was republished later. Work that has been available for a year no longer masquerades as this week's discovery.
 
 
 SCOPE THAT MATCHES HOW YOU THINK
@@ -46,9 +46,9 @@ Papers that clear both bars collect in a local inbox, and the toolbar icon shows
 
 PRIVACY
 
-FilteredResearch reads no web page. It declares no content script, so it cannot see the sites you visit, and nothing ever appears over the pages you are browsing.
+Filtered Research reads no web page. It declares no content script, so it cannot see the sites you visit, and nothing ever appears over the pages you are browsing.
 
-There is no FilteredResearch server. No account, no sign-in, no advertising, no analytics, no telemetry. Your settings, your API key and your entire paper index stay in Chrome's extension storage on your own machine.
+There is no Filtered Research server. No account, no sign-in, no advertising, no analytics, no telemetry. Your settings, your API key and your entire paper index stay in Chrome's extension storage on your own machine.
 
 The extension talks to exactly two places: the OpenAlex API for scholarly metadata, and arXiv's public category taxonomy page so category names stay accurate. Nothing is transmitted to the developer, ever.
 
@@ -75,11 +75,11 @@ Use it to shorten a reading list, not to decide what matters.
 
 OPEN SOURCE
 
-FilteredResearch is released under the Apache-2.0 licence and the full source is public. The scoring method is documented, the limitations are written down, and the behaviour is covered by an automated test suite.
+Filtered Research is released under the Apache-2.0 licence and the full source is public. The scoring method is documented, the limitations are written down, and the behaviour is covered by an automated test suite.
 
 
 DATA SOURCE
 
 Scholarly metadata comes from OpenAlex, released under CC0, and arXiv's public category taxonomy.
 
-FilteredResearch is independent. It is not affiliated with, endorsed by, or sponsored by OpenAlex, arXiv, or OpenAI. Developed with assistance from OpenAI Codex.
+Filtered Research is independent. It is not affiliated with, endorsed by, or sponsored by OpenAlex, arXiv, or OpenAI. Developed with assistance from OpenAI Codex.

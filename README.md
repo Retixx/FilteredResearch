@@ -1,6 +1,6 @@
-# FilteredResearch
+# Filtered Research
 
-FilteredResearch v1.0.0 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
+Filtered Research v1.0.1 is a local-first Chrome extension that builds a user-bounded research index for a chosen field, then ranks papers on two transparent signals:
 
 - **Novelty**: lexical distance from up to 320 older, field-adjacent OpenAlex papers, adjusted for evidence completeness, rare title phrases, cross-field combinations, and incremental wording.
 - **Authorship**: an established-track-record signal using author h-index, citations, recent citedness, works count, ORCID presence, and authorship role.
@@ -136,13 +136,13 @@ Because both bars must be cleared, the final set is usually smaller than either 
 
 ## Privacy and permissions
 
-There is no FilteredResearch backend, analytics, advertising, or telemetry. Public scholarly metadata and scores stay in extension-owned IndexedDB. The personal API key stays in local Chrome extension storage and is hidden from content scripts. Supported pages are inspected for highlighting; unresolved scholarly titles/IDs may be resolved through OpenAlex or arXiv by the background worker, but nothing is sent to the developer.
+There is no Filtered Research backend, analytics, advertising, or telemetry. Public scholarly metadata and scores stay in extension-owned IndexedDB. The personal API key stays in local Chrome extension storage and is hidden from content scripts. Supported pages are inspected for highlighting; unresolved scholarly titles/IDs may be resolved through OpenAlex or arXiv by the background worker, but nothing is sent to the developer.
 
 Read [PRIVACY.md](PRIVACY.md) and the engineering release gate in [COMPLIANCE.md](COMPLIANCE.md). The extension requests no tabs, history, cookies, identity, clipboard, or all-sites access. Notifications are optional.
 
 ## Data source and licenses
 
-FilteredResearch uses [OpenAlex](https://openalex.org/) scholarly metadata. OpenAlex states that [its data is released under CC0](https://help.openalex.org/hc/en-us/articles/24396686889751-About-us); API use remains subject to its [current Terms](https://openalex.org/OpenAlex_termsofservice.pdf) and service limits. FilteredResearch is not affiliated with or endorsed by OpenAlex or any highlighted research site.
+Filtered Research uses [OpenAlex](https://openalex.org/) scholarly metadata. OpenAlex states that [its data is released under CC0](https://help.openalex.org/hc/en-us/articles/24396686889751-About-us); API use remains subject to its [current Terms](https://openalex.org/OpenAlex_termsofservice.pdf) and service limits. Filtered Research is not affiliated with or endorsed by OpenAlex or any highlighted research site.
 
 Project source code is licensed under Apache-2.0. Development was assisted by OpenAI Codex; this project is not affiliated with or endorsed by OpenAI. Contributors must verify the license of any new dependencies, copied code, fonts, or assets.
 

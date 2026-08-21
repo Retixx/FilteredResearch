@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "FilteredResearch",
-  "short_name": "FilteredResearch",
-  "version": "1.0.0",
+  "name": "Filtered Research",
+  "short_name": "Filtered Research",
+  "version": "1.0.1",
   "description": "Build a local, field-filtered research index ranked by novelty and authorship signals.",
   "minimum_chrome_version": "116",
   "icons": {
@@ -28,7 +28,7 @@
     "type": "module"
   },
   "action": {
-    "default_title": "Open FilteredResearch",
+    "default_title": "Open Filtered Research",
     "default_icon": {
       "16": "assets/icon-16.png",
       "32": "assets/icon-32.png"

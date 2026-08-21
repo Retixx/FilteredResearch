@@ -2,7 +2,7 @@
 
 Effective: August 17, 2026
 
-FilteredResearch is a local-first Chrome extension with no FilteredResearch-operated server, advertising, analytics, telemetry, accounts, or sale of data.
+Filtered Research is a local-first Chrome extension with no Filtered Research-operated server, advertising, analytics, telemetry, accounts, or sale of data.
 
 ## Data handled
 
@@ -15,9 +15,9 @@ FilteredResearch is a local-first Chrome extension with no FilteredResearch-oper
 
 The background service worker sends HTTPS requests to `https://api.openalex.org/` for public scholarly metadata and author bibliometrics, and to arXiv's public category-taxonomy page to keep category codes/names aligned with arXiv. If the user entered an OpenAlex key, it is attached only to OpenAlex requests. [OpenAlex's terms](https://openalex.org/OpenAlex_termsofservice.pdf) and [privacy policy](https://openalex.org/OpenAlex_privacy_policy.pdf) apply to its service.
 
-Every OpenAlex request carries a fixed `mailto` parameter identifying FilteredResearch itself, which is how OpenAlex asks tools to identify themselves so it can contact whoever maintains one. It is a project contact address, is the same for every install, and carries nothing about you. Your own OpenAlex key, if you add one, is attached only to these requests and is never sent anywhere else.
+Every OpenAlex request carries a fixed `mailto` parameter identifying Filtered Research itself, which is how OpenAlex asks tools to identify themselves so it can contact whoever maintains one. It is a project contact address, is the same for every install, and carries nothing about you. Your own OpenAlex key, if you add one, is attached only to these requests and is never sent anywhere else.
 
-Only the background service worker makes network requests, and only to the destinations disclosed above. FilteredResearch does not transmit page URLs, browsing activity, research interests, scores, or locally indexed papers to its developer.
+Only the background service worker makes network requests, and only to the destinations disclosed above. Filtered Research does not transmit page URLs, browsing activity, research interests, scores, or locally indexed papers to its developer.
 
 ## Retention and deletion
 
@@ -39,10 +39,10 @@ Users can:
 - `https://arxiv.org/*`: retrieve arXiv's official public category taxonomy so category codes and names stay aligned.
 - `alarms`: wake the service worker so an automatic scan can run on the interval the user chose.
 
-FilteredResearch does not request `tabs`, `history`, `cookies`, `<all_urls>`, precise location, identity, or clipboard access.
+Filtered Research does not request `tabs`, `history`, `cookies`, `<all_urls>`, precise location, identity, or clipboard access.
 
 ## Limited Use statement
 
-Data obtained through Chrome permissions is used only to provide or improve FilteredResearch's single research-discovery purpose. It is not transferred for advertising, sold, used for creditworthiness or lending, or made available for humans to read. No user data is used for personalized, retargeted, or interest-based advertising.
+Data obtained through Chrome permissions is used only to provide or improve Filtered Research's single research-discovery purpose. It is not transferred for advertising, sold, used for creditworthiness or lending, or made available for humans to read. No user data is used for personalized, retargeted, or interest-based advertising.
 
 Questions or security reports should be sent through the repository's private security-reporting channel.

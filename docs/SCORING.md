@@ -1,6 +1,6 @@
 # Scoring model v2
 
-FilteredResearch calculates scores locally from OpenAlex metadata. It does not use an LLM and does not claim to infer scientific truth at publication time.
+Filtered Research calculates scores locally from OpenAlex metadata. It does not use an LLM and does not claim to infer scientific truth at publication time.
 
 ## Novelty signal
 

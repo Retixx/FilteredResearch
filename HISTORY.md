@@ -1,4 +1,4 @@
-# FilteredResearch Release History
+# Filtered Research Release History
 
 ## v0.2.0 — Initial extension
 
@@ -135,7 +135,7 @@ Also hardened after a fuzz sweep of every exported function: a record with no ab
 
 ## v0.8.2 — Polite-pool identification
 
-- Every OpenAlex request now carries a fixed `mailto` parameter identifying FilteredResearch. OpenAlex serves identified callers from its polite pool, which is faster and throttled later than the anonymous pool. Users without a key of their own are the ones who feel anonymous throttling first, so this matters most for a first run.
+- Every OpenAlex request now carries a fixed `mailto` parameter identifying Filtered Research. OpenAlex serves identified callers from its polite pool, which is faster and throttled later than the anonymous pool. Users without a key of their own are the ones who feel anonymous throttling first, so this matters most for a first run.
 - The address is a project alias, identical for every install, published deliberately, and carries nothing about the user. It is attached whether or not a personal key exists, because it identifies the software rather than the caller.
 - Disclosed in `PRIVACY.md` alongside the existing statement that a user's own key is attached only to OpenAlex requests.
 
@@ -158,6 +158,12 @@ First public release. No behavioural changes beyond the fixes below; this versio
 - Audited what leaves the machine: two network call sites, both matching the declared hosts, and no beacon, XHR, WebSocket, cookie or local-storage use anywhere.
 - Added store assets and a plain-text listing description, and generated both promotional tiles at their exact required sizes.
 
+## v1.0.1 — Renamed to Filtered Research
+
+- Renamed the product from FilteredResearch to Filtered Research. The Chrome Web Store takes an item name from the manifest rather than from a dashboard field, so a rename ships as a new version rather than as an edit to the listing.
+- Updated the manifest name and short name, the side panel, settings and inbox headers, the desktop notification text, the documentation, and both promotional tiles.
+- The repository URL, the upload archive filename and the staged build directory keep the original spelling, because the privacy policy URL published on the listing points at the repository and must not break.
+
 ## Current state
 
-The released build is **v1.0.0**. Automated tests at release: **90 passing**.
+The released build is **v1.0.1**. Automated tests at release: **90 passing**.

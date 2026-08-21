@@ -16,7 +16,7 @@ Find unusually novel recent research in your field, ranked on transparent novelt
 
 ## Full description
 
-FilteredResearch helps you find recent papers that are unusual relative to older
+Filtered Research helps you find recent papers that are unusual relative to older
 work in the same field and associated with an established authorship record.
 
 Choose an OpenAlex field, subfield, or arXiv category, then pick how far back to
@@ -39,7 +39,7 @@ Optional automatic scanning checks for new research every 3 hours, 6 hours,
 24 hours, or 3 days. Papers that clear both bars collect in a local inbox and the
 toolbar icon shows an unread count. Automatic scanning is off by default.
 
-FilteredResearch reads no web page. It has no content script, no server, no
+Filtered Research reads no web page. It has no content script, no server, no
 account, no advertising, no analytics, and no telemetry. Your settings, your
 OpenAlex key, and your paper index stay in Chrome extension storage on your
 machine. No developer key is bundled; each user supplies their own free OpenAlex
@@ -50,7 +50,7 @@ peer review, not verified novelty, not a measure of paper quality or scientific
 significance, and not a judgment about any researcher. Evidence and limitations
 are shown inside the extension and in the open-source documentation.
 
-Data source: OpenAlex public scholarly metadata (CC0). FilteredResearch is
+Data source: OpenAlex public scholarly metadata (CC0). Filtered Research is
 independent and is not endorsed by OpenAlex, arXiv, or OpenAI. Open source under
 Apache-2.0. Developed with assistance from OpenAI Codex.
 

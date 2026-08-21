@@ -1,8 +1,8 @@
-# FilteredResearch v1.0.0 specification
+# Filtered Research v1.0.1 specification
 
 ## Product contract
 
-FilteredResearch is an open-source, local-first Chrome extension for finding recent papers that are both lexically unusual within their field and associated with an established authorship track record. It is not a publisher crawler, paper archive, citation recommender, peer-review substitute, or AI research product.
+Filtered Research is an open-source, local-first Chrome extension for finding recent papers that are both lexically unusual within their field and associated with an established authorship track record. It is not a publisher crawler, paper archive, citation recommender, peer-review substitute, or AI research product.
 
 The primary user chooses an OpenAlex field/subfield and an index depth in the sidebar. Depth options are 1 day and 3 days (Light), 1 week and 2 weeks (Moderate), and 1 month and 3 months (Intensive). Three months is the ceiling: deeper passes retrieved far more works than the scoring stage could keep up with, which made discovery unusably slow. Preferences are local-only. Discovery starts through an explicit user refresh, or on the automatic interval the user chooses.
 

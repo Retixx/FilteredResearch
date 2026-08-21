@@ -1,13 +1,13 @@
 # Automatic Chrome updates
 
-Chrome cannot auto-update an unpacked extension from GitHub. On Windows and macOS, normal automatic extension updates must be distributed through the Chrome Web Store. FilteredResearch therefore has two GitHub Actions paths:
+Chrome cannot auto-update an unpacked extension from GitHub. On Windows and macOS, normal automatic extension updates must be distributed through the Chrome Web Store. Filtered Research therefore has two GitHub Actions paths:
 
 - `CI` tests every change and attaches a load-unpacked ZIP to successful `main` runs.
 - `Publish to Chrome Web Store` uploads and submits every eligible `main` change once the store secrets below exist.
 
 ## One-time setup
 
-1. Register a Chrome Web Store developer account and manually create the first FilteredResearch item.
+1. Register a Chrome Web Store developer account and manually create the first Filtered Research item.
 2. Complete its Store listing, Privacy, and Distribution tabs and publish the first version once.
 3. In a Google Cloud project, enable the Chrome Web Store API, create OAuth credentials, and obtain a refresh token with the `https://www.googleapis.com/auth/chromewebstore` scope using the item owner's Google account.
 4. Add these GitHub repository Actions secrets:
